@@ -1,0 +1,163 @@
+OUTC		EQU 1
+MSG		EQU 23
+INISYS		EQU 64
+RDSECL		EQU 68
+
+		CSEG
+
+		ORG 0
+
+		JP boot		; initial entry on cold start
+		JP wboot	; reentry on program exit, warm start
+
+		JP const	; return console input status
+		JP conin	; return console input character
+		JP conout	; send console output character
+		JP list		; send list output character
+		JP auxout	; send auxilliary output character
+		JP auxin	; return auxilliary input character
+
+		JP home		; set disks to logical home
+		JP seldsk	; select disk drive, return disk parameter info
+		JP settrk	; set disk track
+		JP setsec	; set disk sector
+		JP setdma	; set disk I/O memory address
+		JP read		; read physical block(s)
+		JP write	; write physical block(s)
+
+		JP listst	; return list device status
+		JP sectrn	; translate logical to physical sector
+
+		JP conost	; return console output status
+		JP auxist	; return aux input status
+		JP auxost	; return aux output status
+		JP devtbl	; return address of device def table
+		JP cinit	; change baud rate of device
+
+		JP getdrv	; return address of disk drive table
+		JP multio	; set multiple record count for disk I/O
+		JP flush	; flush BIOS maintained disk caching
+
+		JP move		; block move memory to memory
+		JP time		; Signal Time and Date operation
+		JP bnksel	; select bank for code execution and default DMA
+		JP setbnk	; select different bank for disk I/O DMA operations.
+		JP xmove	; set source and destination banks for one operation
+
+		JP 0		; reserved for future expansion
+		JP 0		; reserved for future expansion
+		JP 0		; reserved for future expansion
+
+boot:		RET
+
+wboot:		RET
+
+const:		RET
+conin:		RET
+
+conout:		PUSH AF
+		LD A,C
+		EMT OUTC
+		POP AF
+		RET
+
+list:		RET
+auxout:		RET
+auxin:		RET
+
+home:		RET
+
+seldsk:		PUSH AF
+		LD A,C		; A now contains drive number
+		LD HL,dph0
+		POP AF
+		LD IX,unit
+		RET
+
+settrk:		LD (IX+1),C
+		RET
+
+setsec:		LD (IX+2),C
+		RET
+
+setdma:		LD (address),BC
+		RET
+
+read:		EMT RDSECL
+		RET
+
+write:		RET
+
+listst:		RET
+
+sectrn:		PUSH BC		; no need for translation
+		POP HL
+		INC HL		; but sectors start from 1 (not 0)
+		RET
+
+conost:		RET
+auxist:		RET
+auxost:		RET
+devtbl:		RET
+cinit:		RET
+
+getdrv:		LD HL,drive_table
+		RET
+
+multio:		RET
+
+flush:		XOR A
+		RET
+
+move:		RET
+time:		RET
+bnksel:		RET
+setbnk:		RET
+xmove:		RET
+
+drive_table:	DEFW dph0
+		DEFW 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+dph0:		DEFW 0			; XLT
+		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
+		DEFB 0			; MF
+		DEFW dpb		; DPB
+		DEFW 0			; CSV (not used)
+		DEFW alv0		; ALV
+		DEFW dirbcb		; DIRBCB
+		DEFW 0FFFFH		; DTABCB (not used)
+		DEFW 0FFFFH		; HASH (disabled)
+		DEFW 0			; HBANK (not used)
+
+dpb:		DEFW 36		; SPT
+		DEFB 3		; BSH
+		DEFB 7		; BLM
+		DEFB 0		; EXM
+		DEFW 170	; DSM
+		DEFW 63		; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 8000H	; CKS (not required)
+		DEFW 3		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
+
+dirbcb:		DEFB 0FFH	; DRV
+		DEFS 3		; REC#
+		DEFS 1		; WFLG
+		DEFS 1		; Scratch
+		DEFS 2		; TRACK
+		DEFS 2		; SECTOR
+		DEFW buffer	; BUFFAD
+
+alv0:		DEFS 45
+
+buffer:		DEFS 128
+
+text:		DEFM 'Loading...'
+		DEFB 0FFH
+
+unit:		defb 00100000B
+track:		defb 0
+sector:		defb 0
+address:	defw 0
