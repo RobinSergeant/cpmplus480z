@@ -1,11 +1,17 @@
 OUTC		EQU 1
 MSG		EQU 23
+KBDTL		EQU 31
+KBDW		EQU 33
 INISYS		EQU 64
 RDSECL		EQU 68
 
 BDOS		EQU 0005H
+FCB		EQU 005CH
+CCP_LEN		EQU 25
 FN_PRINT	EQU 9
-
+FN_OPEN_FILE	EQU 15
+FN_READ_SEQ	EQU 20
+FN_SET_DMA	EQU 26
 
 		EXTERNAL @mxtpa
 
@@ -54,7 +60,47 @@ wboot_entry:	JP wboot	; reentry on program exit, warm start
 		JP 0		; reserved for future expansion
 		JP 0		; reserved for future expansion
 
-boot:		LD A,0C3H
+boot:		LD SP,1000H
+		CALL init_page0
+
+		LD DE,sign_on
+		LD C,FN_PRINT
+		CALL BDOS
+
+		JP load_ccp
+
+wboot:		LD SP,1000H
+		CALL init_page0
+
+load_ccp:	LD BC,23		; memset end of FCB
+		LD HL,ccp_fcb_tail
+		LD DE,ccp_fcb_tail+1
+		LDIR
+
+		LD C,FN_OPEN_FILE
+		LD DE,ccp_fcb
+		CALL BDOS
+
+read_loop:	LD C,FN_SET_DMA
+		LD DE,(ccp_dma)
+		CALL BDOS
+
+		LD C,FN_READ_SEQ
+		LD DE,ccp_fcb
+		CALL BDOS
+
+		LD HL,(ccp_dma)
+		LD BC,128
+		ADD HL,BC
+		LD (ccp_dma),HL
+		LD A,(ccp_count)
+		DEC A
+		LD (ccp_count),A
+		JR NZ,read_loop
+
+		JP 0100H
+
+init_page0:	LD A,0C3H
 		LD HL,wboot_entry
 		LD (0000H),A
 		LD (0001H),HL
@@ -63,18 +109,13 @@ boot:		LD A,0C3H
 		LD (0005H),A
 		LD (0006H),HL
 
-		LD SP, 0200H
-		LD DE, sign_on
-		LD C, FN_PRINT
-		CALL BDOS
-		HALT
-
 		RET
 
-wboot:		RET
+const:		EMT KBDTL
+		RET
 
-const:		RET
-conin:		RET
+conin:		EMT KBDW
+		RET
 
 conout:		PUSH AF
 		LD A,C
@@ -181,7 +222,16 @@ buffer:		DEFS 128
 
 sign_on:	DEFM 'This is the sign-on message$'
 
-unit:		defb 00100000B
+ccp_fcb:	DEFB 0
+		DEFM 'CCP     '
+		DEFM 'COM'
+ccp_fcb_tail:	DEFB 0
+		DEFS 23
+
+ccp_dma:	DEFW 0100H
+ccp_count:	DEFB CCP_LEN
+
+unit:		defb 00100001B
 track:		defb 0
 sector:		defb 0
 address:	defw 0
