@@ -1,0 +1,45 @@
+	GLOBAL @civec, @covec, @aivec, @aovec, @lovec, @bnkbf
+	GLOBAL @crdma, @crdsk, @vinfo, @resel, @fx, @usrcd 
+        GLOBAL @mltio, @ermde, @erdsk, @media, @bflgs
+	GLOBAL @date, @hour, @min, @sec, ?erjmp, @mxtpa
+
+scbbase equ    0FE00H          ; Base of the SCB
+
+@CIVEC  equ     scbbase+22h    ; Console Input Redirection 
+                                ; Vector (word, r/w)
+@COVEC  equ     scbbase+24h    ; Console Output Redirection 
+                                ; Vector (word, r/w)
+@AIVEC  equ     scbbase+26h    ; Auxiliary Input Redirection 
+                                ; Vector (word, r/w)
+@AOVEC  equ     scbbase+28h    ; Auxiliary Output Redirection 
+                                ; Vector (word, r/w)
+@LOVEC  equ     scbbase+2Ah    ; List Output Redirection 
+                                ; Vector (word, r/w)
+@BNKBF  equ     scbbase+35h    ; Address of 128 Byte Buffer 
+                                ; for Banked BIOS (word, r/o)
+@CRDMA  equ     scbbase+3Ch    ; Current DMA Address 
+                                ; (word, r/o)
+@CRDSK  equ     scbbase+3Eh    ; Current Disk (byte, r/o)
+@VINFO  equ     scbbase+3Fh    ; BDOS Variable "INFO" 
+                                ; (word, r/o)
+@RESEL  equ     scbbase+41h    ; FCB Flag (byte, r/o)
+@FX     equ     scbbase+43h    ; BDOS Function for Error 
+                                ; Messages (byte, r/o)
+@USRCD  equ     scbbase+44h    ; Current User Code (byte, r/o)
+@MLTIO	equ	scbbase+4Ah	; Current Multi-Sector Count
+				; (byte,r/w)
+@ERMDE  equ     scbbase+4Bh    ; BDOS Error Mode (byte, r/o)
+@ERDSK	equ	scbbase+51h	; BDOS Error Disk (byte,r/o)
+@MEDIA	equ	scbbase+54h	; Set by BIOS to indicate
+				; open door (byte,r/w)
+@BFLGS  equ     scbbase+57h    ; BDOS Message Size Flag (byte,r/o)  
+@DATE   equ     scbbase+58h    ; Date in Days Since 1 Jan 78 
+                                ; (word, r/w)
+@HOUR   equ     scbbase+5Ah    ; Hour in BCD (byte, r/w)
+@MIN    equ     scbbase+5Bh    ; Minute in BCD (byte, r/w)
+@SEC    equ     scbbase+5Ch    ; Second in BCD (byte, r/w)
+?ERJMP  equ     scbbase+5Fh    ; BDOS Error Message Jump
+                                ; (word, r/w)
+@MXTPA  equ     scbbase+62h    ; Top of User TPA 
+                                ; (address at 6,7)(word, r/o)
+

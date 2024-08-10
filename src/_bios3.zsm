@@ -3,12 +3,18 @@ MSG		EQU 23
 INISYS		EQU 64
 RDSECL		EQU 68
 
+BDOS		EQU 0005H
+FN_PRINT	EQU 9
+
+
+		EXTERNAL @mxtpa
+
 		CSEG
 
 		ORG 0
 
 		JP boot		; initial entry on cold start
-		JP wboot	; reentry on program exit, warm start
+wboot_entry:	JP wboot	; reentry on program exit, warm start
 
 		JP const	; return console input status
 		JP conin	; return console input character
@@ -48,7 +54,22 @@ RDSECL		EQU 68
 		JP 0		; reserved for future expansion
 		JP 0		; reserved for future expansion
 
-boot:		RET
+boot:		LD A,0C3H
+		LD HL,wboot_entry
+		LD (0000H),A
+		LD (0001H),HL
+
+		LD HL,(@mxtpa)
+		LD (0005H),A
+		LD (0006H),HL
+
+		LD SP, 0200H
+		LD DE, sign_on
+		LD C, FN_PRINT
+		CALL BDOS
+		HALT
+
+		RET
 
 wboot:		RET
 
@@ -158,10 +179,9 @@ alv0:		DEFS 45
 
 buffer:		DEFS 128
 
-text:		DEFM 'Loading...'
-		DEFB 0FFH
+sign_on:	DEFM 'This is the sign-on message$'
 
-unit:		defb 00100001B
+unit:		defb 00100000B
 track:		defb 0
 sector:		defb 0
 address:	defw 0
