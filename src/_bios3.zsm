@@ -4,6 +4,7 @@ KBDTL		EQU 31
 KBDW		EQU 33
 INISYS		EQU 64
 RDSECL		EQU 68
+WRSECL		EQU 69
 
 BDOS		EQU 0005H
 FCB		EQU 005CH
@@ -77,8 +78,9 @@ wboot:		LD SP,1000H
 		LD A,CCP_LEN
 		LD (ccp_count),A
 
-load_ccp:	LD BC,23		; memset end of FCB
+load_ccp:	LD BC,20		; memset end of FCB
 		LD HL,ccp_fcb_tail
+		LD (HL),0
 		LD DE,ccp_fcb_tail+1
 		LDIR
 
@@ -128,8 +130,8 @@ conout:		PUSH AF
 		POP AF
 		RET
 
-list:		RET
-auxout:		RET
+list:
+auxout:
 auxin:		RET
 
 home:		LD (IX+1),0
@@ -160,7 +162,8 @@ setdma:		LD (address),BC
 read:		EMT RDSECL
 		RET
 
-write:		RET
+write:		EMT WRSECL
+		RET
 
 listst:		RET
 
@@ -169,10 +172,12 @@ sectrn:		PUSH BC		; no need for translation
 		INC L		; but sectors start from 1 (not 0)
 		RET
 
-conost:		RET
-auxist:		RET
-auxost:		RET
-devtbl:		RET
+conost:		LD A,0FFH
+		RET
+
+auxist:
+auxost:
+devtbl:
 cinit:		RET
 
 getdrv:		LD HL,drive_table
@@ -188,9 +193,9 @@ move:		EX DE,HL
 		EX DE,HL
 		RET
 
-time:		RET
-bnksel:		RET
-setbnk:		RET
+time:
+bnksel:
+setbnk:
 xmove:		RET
 
 drive_table:	DEFW dph0,dph1,dph2,dph3
@@ -259,8 +264,7 @@ sign_on:	DEFM 'This is the sign-on message'
 ccp_fcb:	DEFB 0
 		DEFM 'CCP     '
 		DEFM 'COM'
-ccp_fcb_tail:	DEFB 0
-		DEFS 23
+ccp_fcb_tail:	DEFS 21
 
 ccp_dma:	DEFW 0100H
 ccp_count:	DEFB CCP_LEN

@@ -48,11 +48,9 @@ RDSECL		EQU 68
 		JP 0		; reserved for future expansion
 		JP 0		; reserved for future expansion
 
-boot:		RET
-
-wboot:		RET
-
-const:		RET
+boot:
+wboot:
+const:
 conin:		RET
 
 conout:		PUSH AF
@@ -61,16 +59,12 @@ conout:		PUSH AF
 		POP AF
 		RET
 
-list:		RET
-auxout:		RET
-auxin:		RET
-
+list:
+auxout:
+auxin:
 home:		RET
 
-seldsk:		PUSH AF
-		LD A,C		; A now contains drive number
-		LD HL,dph0
-		POP AF
+seldsk:		LD HL,dph0
 		LD IX,unit
 		RET
 
@@ -86,8 +80,7 @@ setdma:		LD (address),BC
 read:		EMT RDSECL
 		RET
 
-write:		RET
-
+write:
 listst:		RET
 
 sectrn:		PUSH BC		; no need for translation
@@ -95,10 +88,10 @@ sectrn:		PUSH BC		; no need for translation
 		INC L		; but sectors start from 1 (not 0)
 		RET
 
-conost:		RET
-auxist:		RET
-auxost:		RET
-devtbl:		RET
+conost:
+auxist:
+auxost:
+devtbl:
 cinit:		RET
 
 getdrv:		LD HL,drive_table
@@ -114,9 +107,9 @@ move:		EX DE,HL
 		EX DE,HL
 		RET
 
-time:		RET
-bnksel:		RET
-setbnk:		RET
+time:
+bnksel:
+setbnk:
 xmove:		RET
 
 drive_table:	DEFW dph0
@@ -158,10 +151,7 @@ alv0:		DEFS 45
 
 buffer:		DEFS 128
 
-text:		DEFM 'Loading...'
-		DEFB 0FFH
-
-unit:		defb 00100001B
+unit:		defb 00100000B
 track:		defb 0
 sector:		defb 0
 address:	defw 0
