@@ -1,0 +1,48 @@
+CONTC		EQU 0
+OUTC		EQU 1
+MSG		EQU 23
+WIDTH		EQU 52
+RDSECL		EQU 68
+
+LDR_LEN		EQU 24
+
+		COM
+
+		ORG 80H
+
+		LD IX,unit
+		LD BC,128
+		LD HL,(address)
+
+read_loop:	EMT RDSECL
+		JR NZ,error
+
+		ADD HL,BC		; move destination buffer
+		LD (address),HL
+
+		LD A,(sector)		; increment sector no.
+		INC A
+		LD (sector),A
+		CP LDR_LEN+1
+		JR C,read_loop
+
+		LD A,17			; prevent autopaging
+		EMT OUTC
+
+		LD A,1			; set 80 column mode
+		EMT WIDTH
+
+		JP 0100H		; transfer control to loader
+
+error:		LD HL,err_msg
+		EMT MSG
+		EMT CONTC		; back to ROS
+
+unit:		DEFB 00100000B
+track:		DEFB 1
+sector:		DEFB 1
+address:	DEFW 0100H
+
+err_msg:	DEFB 13
+		DEFM 'Disc error while loading CPMLDR.COM'
+		DEFB -1

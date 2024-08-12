@@ -1,8 +1,6 @@
 OUTC		EQU 1
-MSG		EQU 23
 KBDTL		EQU 31
 KBDW		EQU 33
-INISYS		EQU 64
 RDSECL		EQU 68
 WRSECL		EQU 69
 
@@ -202,7 +200,6 @@ flush:		XOR A
 move:		EX DE,HL
 		LDIR
 		EX DE,HL
-		RET
 
 time:
 bnksel:
@@ -280,7 +277,7 @@ ccp_fcb_tail:	DEFS 21
 ccp_dma:	DEFW 0100H
 ccp_count:	DEFB CCP_LEN
 
-unit:		defb 0
-track:		defb 0
-sector:		defb 0
-address:	defw 0
+unit:		DEFB 0
+track:		DEFB 0
+sector:		DEFB 0
+address:	DEFW 0

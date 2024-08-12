@@ -1,6 +1,4 @@
 OUTC		EQU 1
-MSG		EQU 23
-INISYS		EQU 64
 RDSECL		EQU 68
 
 		CSEG
@@ -108,7 +106,6 @@ flush:		XOR A
 move:		EX DE,HL
 		LDIR
 		EX DE,HL
-		RET
 
 time:
 bnksel:
@@ -154,7 +151,7 @@ alv0:		DEFS 45
 
 buffer:		DEFS 128
 
-unit:		defb 00100000B
-track:		defb 0
-sector:		defb 0
-address:	defw 0
+unit:		DEFB 00100000B
+track:		DEFB 0
+sector:		DEFB 0
+address:	DEFW 0
