@@ -160,10 +160,21 @@ setdma:		LD (address),BC
 		RET
 
 read:		EMT RDSECL
-		RET
+		LD A,1
+		RET NZ		; return 1 if an error occured
+		XOR A
+		RET		; return 0 on sucess
 
 write:		EMT WRSECL
-		RET
+		JR Z,write_ok
+		BIT 6,A
+		LD A,1		; return 1 for general failure
+		RET Z		; (write protect bit not set)
+		RET C		; (IDC protocol error)
+		INC A
+		RET		; return 2 if disc write protected
+write_ok:	XOR A
+		RET		; return 0 on sucess
 
 listst:		RET
 

@@ -78,7 +78,10 @@ setdma:		LD (address),BC
 		RET
 
 read:		EMT RDSECL
-		RET
+		LD A,1
+		RET NZ		; return 1 if an error occured
+		XOR A
+		RET		; return 0 on sucess
 
 write:
 listst:		RET
