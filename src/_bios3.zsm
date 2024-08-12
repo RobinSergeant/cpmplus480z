@@ -5,12 +5,8 @@ RDSECL		EQU 68
 WRSECL		EQU 69
 
 BDOS		EQU 0005H
-FCB		EQU 005CH
 CCP_LEN		EQU 25
 FN_PRINT	EQU 9
-FN_OPEN_FILE	EQU 15
-FN_READ_SEQ	EQU 20
-FN_SET_DMA	EQU 26
 
 		EXTERNAL @mxtpa
 
@@ -72,38 +68,28 @@ wboot:		LD SP,1000H
 		CALL init_page0
 
 		LD HL,0100H
-		LD (ccp_dma),HL
-		LD A,CCP_LEN
-		LD (ccp_count),A
+		LD (address),HL
+		LD IX,unit
+		LD (IX+0),00100000B
+		LD (IX+1),2
+		LD (IX+2),1
 
-load_ccp:	LD BC,20		; memset end of FCB
-		LD HL,ccp_fcb_tail
-		LD (HL),0
-		LD DE,ccp_fcb_tail+1
-		LDIR
+load_ccp:	LD BC,128
+		LD HL,(address)
+		LD IX,unit
 
-		LD C,FN_OPEN_FILE
-		LD DE,ccp_fcb
-		CALL BDOS
+read_loop:	EMT RDSECL
 
-read_loop:	LD C,FN_SET_DMA
-		LD DE,(ccp_dma)
-		CALL BDOS
+		ADD HL,BC		; move destination buffer
+		LD (address),HL
 
-		LD C,FN_READ_SEQ
-		LD DE,ccp_fcb
-		CALL BDOS
+		LD A,(sector)		; increment sector no.
+		INC A
+		LD (sector),A
+		CP CCP_LEN+1
+		JR C,read_loop
 
-		LD HL,(ccp_dma)
-		LD BC,128
-		ADD HL,BC
-		LD (ccp_dma),HL
-		LD A,(ccp_count)
-		DEC A
-		LD (ccp_count),A
-		JR NZ,read_loop
-
-		JP 0100H
+		JP 0100H		; start CCP
 
 init_page0:	LD A,0C3H
 		LD HL,wboot_entry
@@ -269,15 +255,7 @@ dpb:		DEFW 36		; SPT
 sign_on:	DEFM 'This is the sign-on message'
 		DEFB 13,10,10,'$'
 
-ccp_fcb:	DEFB 0
-		DEFM 'CCP     '
-		DEFM 'COM'
-ccp_fcb_tail:	DEFS 21
-
-ccp_dma:	DEFW 0100H
-ccp_count:	DEFB CCP_LEN
-
-unit:		DEFB 0
-track:		DEFB 0
-sector:		DEFB 0
-address:	DEFW 0
+unit:		DEFB 00100000B
+track:		DEFB 2
+sector:		DEFB 1
+address:	DEFW 0100H

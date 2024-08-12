@@ -1,4 +1,5 @@
 WRSECL		EQU 69
+FLUSH		EQU 71
 
 BDOS		EQU 0005H
 FN_PRINT	EQU 9
@@ -12,21 +13,31 @@ FN_SET_DMA	EQU 26
 
 		LD IX,UNIT
 
+		CALL process_file	; write cold boot loader to track 0
+
+		SET 5,(IX+0)		; set DD bit (only track 0 is SD)
+
+		LD HL,ldr_fcb		; write cpmldr to track 1
+		CALL setup_file
 		CALL process_file
 
-		LD HL,ldr_fcb
-		LD (current_fcb),HL
-		XOR A
-		LD (sector_count),A
-		LD HL,1000H
+		LD HL,ccp_fcb		; write ccp to track 2
+		CALL setup_file
+		CALL process_file
+
+		LD IX,flush_unit	; flush any unwritten data
+		EMT FLUSH
+
+		RET
+
+setup_file:	LD (current_fcb),HL
+		LD HL,1000H		; reset buffer pointers
 		LD (dma_buffer),HL
-		SET 5,(IX+0)
-		INC (IX+1)
-		LD (IX+2),1
 		LD (address),HL
-
-		CALL process_file
-
+		INC (IX+1)		; increment track
+		LD (IX+2),1		; reset sector to 1 (start of next track)
+		LD HL,ok_param		; put new track number in ok string
+		INC (HL)
 		RET
 
 process_file:	LD C,FN_OPEN_FILE
@@ -56,12 +67,12 @@ read_loop:	LD C,FN_SET_DMA
 write_loop:	XOR A
 		LD HL,sector_count
 		CP (HL)
-		RET Z
+		JR Z,done
 		DEC (HL)
 
 		EMT WRSECL
 
-		INC (IX+2)
+		INC (IX+2)		; increment sector
 		LD HL,(address)
 		LD BC,128
 		ADD HL,BC
@@ -71,6 +82,11 @@ write_loop:	XOR A
 
 not_found:	LD C,FN_PRINT
 		LD DE,error_msg
+		CALL BDOS
+		RET
+
+done:		LD C,FN_PRINT
+		LD DE,ok_msg
 		CALL BDOS
 		RET
 
@@ -84,16 +100,25 @@ ldr_fcb:	DEFB 0
 		DEFM 'COM'
 		DEFS 21
 
+ccp_fcb:	DEFB 0
+		DEFM 'CCP     '
+		DEFM 'COM'
+		DEFS 21
+
 dma_buffer:	DEFW 1000H
 sector_count:	DEFB 0
 current_fcb:	DEFW cold_fcb
 
-error_msg:	DEFM 'File not found$'
+error_msg:	DEFM 'File not found'
+		DEFB 13,'$'
+
+ok_msg:		DEFM 'Track '
+ok_param:	DEFM '0 written'
+		DEFB 13,'$'
 
 unit:		DEFB 00000001B
 track:		DEFB 0
 sector:		DEFB 1
 address:	DEFW 1000H
 
-
-
+flush_unit:	DEFB 00000001B
