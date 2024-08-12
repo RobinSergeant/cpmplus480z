@@ -1,0 +1,99 @@
+WRSECL		EQU 69
+
+BDOS		EQU 0005H
+FN_PRINT	EQU 9
+FN_OUT		EQU 2
+FN_OPEN_FILE	EQU 15
+FN_READ_SEQ	EQU 20
+FN_SET_DMA	EQU 26
+
+		COM
+		ORG 100H
+
+		LD IX,UNIT
+
+		CALL process_file
+
+		LD HL,ldr_fcb
+		LD (current_fcb),HL
+		XOR A
+		LD (sector_count),A
+		LD HL,1000H
+		LD (dma_buffer),HL
+		SET 5,(IX+0)
+		INC (IX+1)
+		LD (IX+2),1
+		LD (address),HL
+
+		CALL process_file
+
+		RET
+
+process_file:	LD C,FN_OPEN_FILE
+		LD DE,(current_fcb)
+		CALL BDOS
+		INC A
+		JR Z,not_found
+
+read_loop:	LD C,FN_SET_DMA
+		LD DE,(dma_buffer)
+		CALL BDOS
+
+		LD C,FN_READ_SEQ
+		LD DE,(current_fcb)
+		CALL BDOS
+		CP 0
+		JR NZ,write_loop
+
+		LD HL,sector_count
+		INC (hl)
+		LD HL,(dma_buffer)
+		LD BC,128
+		ADD HL,BC
+		LD (dma_buffer),HL
+		JR read_loop
+
+write_loop:	XOR A
+		LD HL,sector_count
+		CP (HL)
+		RET Z
+		DEC (HL)
+
+		EMT WRSECL
+
+		INC (IX+2)
+		LD HL,(address)
+		LD BC,128
+		ADD HL,BC
+		LD (address),HL
+
+		JR write_loop
+
+not_found:	LD C,FN_PRINT
+		LD DE,error_msg
+		CALL BDOS
+		RET
+
+cold_fcb:	DEFB 0
+		DEFM 'COLDBOOT'
+		DEFM 'COM'
+		DEFS 21
+
+ldr_fcb:	DEFB 0
+		DEFM 'CPMLDR  '
+		DEFM 'COM'
+		DEFS 21
+
+dma_buffer:	DEFW 1000H
+sector_count:	DEFB 0
+current_fcb:	DEFW cold_fcb
+
+error_msg:	DEFM 'File not found$'
+
+unit:		DEFB 00000001B
+track:		DEFB 0
+sector:		DEFB 1
+address:	DEFW 1000H
+
+
+
