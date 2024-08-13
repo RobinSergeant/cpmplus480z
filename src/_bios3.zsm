@@ -91,6 +91,15 @@ read_loop:	LD (address),HL
 		CP CCP_LEN+1
 		JR C,read_loop
 
+		LD DE,0110H		; look for "LOADER" string
+		LD HL,ccp_identifier	; to check if CCP valid
+		LD BC,6			; (not full proof)
+check_ccp:	LD A,(DE)
+		CPI
+		JR NZ,read_error
+		INC DE
+		JP PE,check_ccp		; P/V is set until BC = 0
+
 		JP 0100H		; start CCP
 
 read_error:	LD DE,ccp_err_msg
@@ -275,6 +284,8 @@ sign_on:	DEFB 31
 
 ccp_err_msg:	DEFB 13
 		DEFM 'ERROR Check System Disc in A, press <RETURN>$'
+
+ccp_identifier:	DEFM 'LOADER'
 
 unit:		DEFB 00100000B
 track:		DEFB 2
