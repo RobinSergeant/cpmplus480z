@@ -5,3 +5,6 @@
 *.rel
 *.imd
 *.mfi
+*.spr
+*.sym
+*.sys
