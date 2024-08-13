@@ -1,6 +1,7 @@
 OUTC		EQU 1
 KBDTL		EQU 31
 KBDW		EQU 33
+WIDTH		EQU 52
 RDSECL		EQU 68
 WRSECL		EQU 69
 FLUSH		EQU 71
@@ -67,6 +68,9 @@ boot:		LD SP,1000H
 
 wboot:		LD SP,1000H
 		CALL init_page0
+
+		LD A,1			; set 80 column mode in case changed
+		EMT WIDTH
 
 		LD HL,0100H
 		LD (address),HL
@@ -257,8 +261,11 @@ dpb:		DEFW 36		; SPT
 		DEFB 0		; PSH
 		DEFB 0		; PHM
 
-sign_on:	DEFM 'This is the sign-on message'
-		DEFB 13,10,10,'$'
+sign_on:	DEFB 31
+		DEFM 'CP/M Plus (3.0) for RM 480Z'
+		DEFB 13,13
+		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
+		DEFB 13,13,'$'
 
 unit:		DEFB 00100000B
 track:		DEFB 2
