@@ -115,11 +115,8 @@ conout:		PUSH AF
 		POP AF
 		RET
 
-list:
-auxout:
-auxin:		RET
-
-home:		LD (IX+1),0
+home:		LD IX,unit
+		LD (IX+1),0
 		RET
 
 seldsk:		PUSH BC
@@ -135,16 +132,19 @@ seldsk:		PUSH BC
 		SET 5,(IX+0)
 		RET
 
-settrk:		LD (IX+1),C
+settrk:		LD IX,unit
+		LD (IX+1),C
 		RET
 
-setsec:		LD (IX+2),C
+setsec:		LD IX,unit
+		LD (IX+2),C
 		RET
 
 setdma:		LD (address),BC
 		RET
 
-read:		EMT RDSECL
+read:		LD IX,unit
+		EMT RDSECL
 		LD A,1
 		RET NZ		; return 1 if an error occured
 		XOR A
@@ -152,10 +152,10 @@ read:		EMT RDSECL
 
 flushdsk:	LD IX,flush_unit
 		EMT FLUSH
-		LD IX,unit
 		JR check_write
 
-write:		EMT WRSECL
+write:		LD IX,unit
+		EMT WRSECL
 check_write:	JR Z,write_ok
 		BIT 6,A
 		LD A,1		; return 1 for general failure
@@ -166,8 +166,6 @@ check_write:	JR Z,write_ok
 write_ok:	XOR A
 		RET		; return 0 on sucess
 
-listst:		RET
-
 sectrn:		PUSH BC		; no need for translation
 		POP HL
 		INC L		; but sectors start from 1 (not 0)
@@ -175,11 +173,6 @@ sectrn:		PUSH BC		; no need for translation
 
 conost:		LD A,0FFH
 		RET
-
-auxist:
-auxost:
-devtbl:
-cinit:		RET
 
 getdrv:		LD HL,drive_table
 		RET
@@ -190,6 +183,15 @@ move:		EX DE,HL
 		LDIR
 		EX DE,HL
 
+not_supported:
+list:
+auxout:
+auxin:
+listst:
+auxist:
+auxost:
+devtbl:
+cinit:
 time:
 bnksel:
 setbnk:

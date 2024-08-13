@@ -46,21 +46,11 @@ RDSECL		EQU 68
 		JP 0		; reserved for future expansion
 		JP 0		; reserved for future expansion
 
-boot:
-wboot:
-const:
-conin:		RET
-
 conout:		PUSH AF
 		LD A,C
 		EMT OUTC
 		POP AF
 		RET
-
-list:
-auxout:
-auxin:
-home:		RET
 
 seldsk:		LD HL,dph0
 		LD IX,unit
@@ -81,19 +71,10 @@ read:		EMT RDSECL
 		XOR A
 		RET		; return 0 on sucess
 
-write:
-listst:		RET
-
 sectrn:		PUSH BC		; no need for translation
 		POP HL
 		INC L		; but sectors start from 1 (not 0)
 		RET
-
-conost:
-auxist:
-auxost:
-devtbl:
-cinit:		RET
 
 getdrv:		LD HL,drive_table
 		RET
@@ -107,6 +88,22 @@ move:		EX DE,HL
 		LDIR
 		EX DE,HL
 
+not_supported:
+boot:
+wboot:
+const:
+conin:
+list:
+auxout:
+auxin:
+home:
+write:
+listst:
+conost:
+auxist:
+auxost:
+devtbl:
+cinit:
 time:
 bnksel:
 setbnk:
