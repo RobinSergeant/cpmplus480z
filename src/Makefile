@@ -18,10 +18,10 @@ all: $(TARGETS)
 	tnylpo zasm $*.aaa
 
 cpmldr.com : cpmldr.rel ldrbios.rel
-	cpm link cpmldr,ldrbios
+	tnylpo link cpmldr,ldrbios
 
 bios3.spr : bios3.rel scb.rel
-	cpm link bios3[os]=bios3,scb
+	tnylpo link bios3[os]=bios3,scb
 
 cpm3.sys : bios3.spr bdos3.spr gencpm.dat
 	tnylpo gencpm auto
