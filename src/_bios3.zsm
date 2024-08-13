@@ -3,6 +3,7 @@ KBDTL		EQU 31
 KBDW		EQU 33
 RDSECL		EQU 68
 WRSECL		EQU 69
+FLUSH		EQU 71
 
 BDOS		EQU 0005H
 CCP_LEN		EQU 25
@@ -43,7 +44,7 @@ wboot_entry:	JP wboot	; reentry on program exit, warm start
 
 		JP getdrv	; return address of disk drive table
 		JP multio	; set multiple record count for disk I/O
-		JP flush	; flush BIOS maintained disk caching
+		JP flushdsk	; flush BIOS maintained disk caching
 
 		JP move		; block move memory to memory
 		JP time		; Signal Time and Date operation
@@ -149,8 +150,13 @@ read:		EMT RDSECL
 		XOR A
 		RET		; return 0 on sucess
 
+flushdsk:	LD IX,flush_unit
+		EMT FLUSH
+		LD IX,unit
+		JR check_write
+
 write:		EMT WRSECL
-		JR Z,write_ok
+check_write:	JR Z,write_ok
 		BIT 6,A
 		LD A,1		; return 1 for general failure
 		RET Z		; (write protect bit not set)
@@ -179,9 +185,6 @@ getdrv:		LD HL,drive_table
 		RET
 
 multio:		RET
-
-flush:		XOR A
-		RET
 
 move:		EX DE,HL
 		LDIR
@@ -259,3 +262,5 @@ unit:		DEFB 00100000B
 track:		DEFB 2
 sector:		DEFB 1
 address:	DEFW 0100H
+
+flush_unit:	DEFB 00001000B
