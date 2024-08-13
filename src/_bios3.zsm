@@ -8,6 +8,7 @@ FLUSH		EQU 71
 
 BDOS		EQU 0005H
 CCP_LEN		EQU 25
+FN_CONSOLE_IN	EQU 1
 FN_PRINT	EQU 9
 
 		EXTERNAL @mxtpa
@@ -64,7 +65,7 @@ boot:		LD SP,1000H
 		LD C,FN_PRINT
 		CALL BDOS
 
-		JP load_ccp
+		JR load_ccp
 
 wboot:		LD SP,1000H
 		CALL init_page0
@@ -72,22 +73,18 @@ wboot:		LD SP,1000H
 		LD A,1			; set 80 column mode in case changed
 		EMT WIDTH
 
-		LD HL,0100H
-		LD (address),HL
+load_ccp:	LD HL,0100H
+		LD BC,128
 		LD IX,unit
 		LD (IX+0),00100000B
 		LD (IX+1),2
 		LD (IX+2),1
 
-load_ccp:	LD BC,128
-		LD HL,(address)
-		LD IX,unit
+read_loop:	LD (address),HL
+		EMT RDSECL
+		JR NZ,read_error
 
-read_loop:	EMT RDSECL
-
-		ADD HL,BC		; move destination buffer
-		LD (address),HL
-
+		ADD HL,BC		; advance buffer
 		LD A,(sector)		; increment sector no.
 		INC A
 		LD (sector),A
@@ -95,6 +92,15 @@ read_loop:	EMT RDSECL
 		JR C,read_loop
 
 		JP 0100H		; start CCP
+
+read_error:	LD DE,ccp_err_msg
+		LD C,FN_PRINT
+		CALL BDOS
+
+		LD C,FN_CONSOLE_IN	; wait for key
+		CALL BDOS
+
+		JR load_ccp		; try again
 
 init_page0:	LD A,0C3H
 		LD HL,wboot_entry
@@ -266,6 +272,9 @@ sign_on:	DEFB 31
 		DEFB 13,13
 		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13,'$'
+
+ccp_err_msg:	DEFB 13
+		DEFM 'ERROR Check System Disc in A, press <RETURN>$'
 
 unit:		DEFB 00100000B
 track:		DEFB 2
