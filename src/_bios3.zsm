@@ -1,3 +1,5 @@
+CCP_IN_RAM	QUERY 'Store CCP in RAM (TRUE/FALSE)'
+
 OUTC		EQU 1
 KBDTL		EQU 31
 KBDW		EQU 33
@@ -8,6 +10,9 @@ FLUSH		EQU 71
 
 BDOS		EQU 0005H
 CCP_LEN		EQU 25
+CCP_SIZE	EQU CCP_LEN * 128
+PORT1_MASK	EQU 0FF01H
+PORT1		EQU 019H
 FN_CONSOLE_IN	EQU 1
 FN_PRINT	EQU 9
 
@@ -65,13 +70,79 @@ boot:		LD SP,1000H
 		LD C,FN_PRINT
 		CALL BDOS
 
+		COND CCP_IN_RAM
+
+		LD IX,unit		; load CCP from track 2
+		LD HL,(address)
+		LD BC,128
+
+read_loop:	EMT RDSECL
+		JR NZ,read_error
+
+		ADD HL,BC		; advance buffer
+		LD (address),HL
+		LD A,(sector)		; increment sector no.
+		INC A
+		LD (sector),A
+		CP CCP_LEN+1
+		JR C,read_loop
+
+		LD C,PORT1		; select Page 3 (all RAM)
+		LD A,(PORT1_MASK)
+		OR 3
+		DI			; disable interrupts while
+		OUT (C),A		; ROM is unavailable
+
+		LD DE,0E800H		; copy CCP to hidden area
+		LD HL,0100H		; of RAM (behind ROM) so
+		LD BC,CCP_SIZE		; we can quickly copy it back
+		LDIR			; during a warm boot
+
+		LD C,PORT1		; return to Page 1
+		LD A,(PORT1_MASK)
+		OUT (C),A
+		EI			; re-enable interrupts
+
+		JP 0100H		; start CCP
+
+read_error:	LD DE,ccp_err_msg
+		LD C,FN_PRINT
+		CALL BDOS
+		HALT			; nothing more we can do
+		
+		ELSE
+
 		JR load_ccp
+
+		ENDC
 
 wboot:		LD SP,1000H
 		CALL init_page0
 
 		LD A,1			; set 80 column mode in case changed
 		EMT WIDTH
+
+		COND CCP_IN_RAM
+
+		LD C,PORT1		; select Page 3 (all RAM)
+		LD A,(PORT1_MASK)
+		OR 3
+		DI			; disable interrupts while
+		OUT (C),A		; ROM is unavailable
+
+		LD DE,0100H		; copy CCP back to TPA
+		LD HL,0E800H
+		LD BC,CCP_SIZE
+		LDIR
+
+		LD C,PORT1		; return to Page 1
+		LD A,(PORT1_MASK)
+		OUT (C),A
+		EI			; re-enable interrupts
+
+		JP 0100H		; start CCP
+		
+		ELSE
 
 load_ccp:	LD HL,0100H
 		LD BC,128
@@ -110,6 +181,8 @@ read_error:	LD DE,ccp_err_msg
 		CALL BDOS
 
 		JR load_ccp		; try again
+
+		ENDC
 
 init_page0:	LD A,0C3H
 		LD HL,wboot_entry
@@ -282,10 +355,17 @@ sign_on:	DEFB 31
 		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13,'$'
 
+		COND CCP_IN_RAM
+
+ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc$'
+
+		ELSE
+
 ccp_err_msg:	DEFB 13
 		DEFM 'ERROR Check System Disc in A, press <RETURN>$'
-
 ccp_identifier:	DEFM 'LOADER'
+
+		ENDC
 
 unit:		DEFB 00100000B
 track:		DEFB 2
