@@ -6,12 +6,17 @@ FN_PRINT	EQU 9
 FN_OUT		EQU 2
 FN_OPEN_FILE	EQU 15
 FN_READ_SEQ	EQU 20
+FN_DRV_GET	EQU 25
 FN_SET_DMA	EQU 26
 
 		COM
 		ORG 100H
 
-		LD IX,UNIT
+		LD C,FN_DRV_GET		; output to selected drive
+		CALL BDOS
+		LD (unit),A
+
+		LD IX,unit
 
 		CALL process_file	; write cold boot loader to track 0
 
@@ -25,8 +30,7 @@ FN_SET_DMA	EQU 26
 		CALL setup_file
 		CALL process_file
 
-		LD IX,flush_unit	; flush any unwritten data
-		EMT FLUSH
+		EMT FLUSH		; flush any unwritten data
 
 		RET
 
@@ -120,5 +124,3 @@ unit:		DEFB 00000001B
 track:		DEFB 0
 sector:		DEFB 1
 address:	DEFW 1000H
-
-flush_unit:	DEFB 00000001B
