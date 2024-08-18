@@ -23,7 +23,10 @@ cpmldr.com : cpmldr.rel ldrbios.rel
 bios3.spr : bios3.rel scb.rel
 	tnylpo link bios3[os]=bios3,scb
 
-cpm3.sys : bios3.spr bdos3.spr gencpm.dat
+bnkbios3.spr : bnkbios3.rel scb.rel
+	tnylpo link bnkbios3[b]=bnkbios3,scb
+
+cpm3.sys : bios3.spr bnkbios3.spr bdos3.spr gencpm.dat
 	tnylpo gencpm auto
 
 install: test.imd ccp.com $(TARGETS)

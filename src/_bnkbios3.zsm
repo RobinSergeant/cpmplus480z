@@ -1,0 +1,506 @@
+CCP_IN_RAM	QUERY 'Store CCP in RAM (TRUE/FALSE)'
+
+OUTC		EQU 1
+MSG		EQU 23
+CHAN		EQU 24
+KBDTL		EQU 31
+KBDW		EQU 33
+WIDTH		EQU 52
+RDSECL		EQU 68
+WRSECL		EQU 69
+FLUSH		EQU 71
+
+BDOS		EQU 0005H
+CCP_LEN		EQU 25
+CCP_SIZE	EQU CCP_LEN * 128
+PORT1_MASK	EQU 0FF01H
+PORT0		EQU 018H
+PORT1		EQU 019H
+FN_CONSOLE_IN	EQU 1
+FN_PRINT	EQU 9
+
+		EXTERNAL @mxtpa
+
+		CSEG
+
+		ORG 0
+
+		JP boot		; initial entry on cold start
+wboot_entry:	JP wboot	; reentry on program exit, warm start
+
+		JP const	; return console input status
+		JP conin	; return console input character
+		JP conout	; send console output character
+		JP list		; send list output character
+		JP auxout	; send auxilliary output character
+		JP auxin	; return auxilliary input character
+
+		JP home		; set disks to logical home
+		JP seldsk	; select disk drive, return disk parameter info
+		JP settrk	; set disk track
+		JP setsec	; set disk sector
+		JP setdma	; set disk I/O memory address
+		JP read		; read physical block(s)
+		JP write	; write physical block(s)
+
+		JP listst	; return list device status
+		JP sectrn	; translate logical to physical sector
+
+		JP conost	; return console output status
+		JP auxist	; return aux input status
+		JP auxost	; return aux output status
+		JP devtbl	; return address of device def table
+		JP cinit	; change baud rate of device
+
+		JP getdrv	; return address of disk drive table
+		JP multio	; set multiple record count for disk I/O
+		JP flushdsk	; flush BIOS maintained disk caching
+
+		JP move		; block move memory to memory
+		JP time		; Signal Time and Date operation
+		JP bnksel	; select bank for code execution and default DMA
+		JP setbnk	; select different bank for disk I/O DMA operations.
+		JP xmove	; set source and destination banks for one operation
+
+		JP 0		; reserved for future expansion
+		JP 0		; reserved for future expansion
+		JP 0		; reserved for future expansion
+
+boot:		LD SP,bios_stack
+		CALL init_page0
+
+		DI
+		LD B,2		; map RAM bank 4 to 8000H
+		LD C,PORT0
+		LD A,4
+		OUT (C),A
+
+		LD DE,8000H	; move first 16K of system block
+		LD HL,0000H
+		LD BC,4000H
+		LDIR
+
+		LD B,2		; map RAM bank 5 to 8000H
+		LD C,PORT0
+		LD A,5
+		OUT (C),A
+
+		LD DE,8000H	; move second 16K of system block
+		LD BC,4000H
+		LDIR
+
+		LD B,2		; map RAM bank 3 back to 8000H
+		LD C,PORT0
+		LD A,3
+		OUT (C),A
+		EI
+
+		LD HL,sign_on
+		EMT MSG
+
+		COND CCP_IN_RAM
+
+		LD IX,unit		; load CCP from track 2
+		LD HL,(address)
+		LD BC,128
+
+read_loop:	EMT RDSECL
+		JR NZ,read_error
+
+		ADD HL,BC		; advance buffer
+		LD (address),HL
+		LD A,(sector)		; increment sector no.
+		INC A
+		LD (sector),A
+		CP CCP_LEN+1
+		JR C,read_loop
+
+		LD C,PORT1		; select Page 3 (all RAM)
+		LD A,(PORT1_MASK)
+		OR 3
+		DI			; disable interrupts while
+		OUT (C),A		; ROM is unavailable
+
+		LD DE,0E800H		; copy CCP to hidden area
+		LD HL,0100H		; of RAM (behind ROM) so
+		LD BC,CCP_SIZE		; we can quickly copy it back
+		LDIR			; during a warm boot
+
+		LD C,PORT1		; return to Page 1
+		LD A,(PORT1_MASK)
+		OUT (C),A
+		EI			; re-enable interrupts
+
+		JP 0100H		; start CCP
+
+read_error:	LD DE,ccp_err_msg
+		LD C,FN_PRINT
+		CALL BDOS
+		HALT			; nothing more we can do
+		
+		ELSE
+
+		JR load_ccp
+
+		ENDC
+
+wboot:		LD SP,1000H
+		CALL init_page0
+
+		LD A,1			; set 80 column mode in case changed
+		EMT WIDTH
+
+		COND CCP_IN_RAM
+
+		LD C,PORT1		; select Page 3 (all RAM)
+		LD A,(PORT1_MASK)
+		OR 3
+		DI			; disable interrupts while
+		OUT (C),A		; ROM is unavailable
+
+		LD DE,0100H		; copy CCP back to TPA
+		LD HL,0E800H
+		LD BC,CCP_SIZE
+		LDIR
+
+		LD C,PORT1		; return to Page 1
+		LD A,(PORT1_MASK)
+		OUT (C),A
+		EI			; re-enable interrupts
+
+		JP 0100H		; start CCP
+		
+		ELSE
+
+load_ccp:	LD HL,0100H
+		LD BC,128
+		LD IX,unit
+		LD (IX+0),00100000B
+		LD (IX+1),2
+		LD (IX+2),1
+
+read_loop:	LD (address),HL
+		EMT RDSECL
+		JR NZ,read_error
+
+		ADD HL,BC		; advance buffer
+		LD A,(sector)		; increment sector no.
+		INC A
+		LD (sector),A
+		CP CCP_LEN+1
+		JR C,read_loop
+
+		LD DE,0110H		; look for "LOADER" string
+		LD HL,ccp_identifier	; to check if CCP valid
+		LD BC,6			; (not full proof)
+check_ccp:	LD A,(DE)
+		CPI
+		JR NZ,read_error
+		INC DE
+		JP PE,check_ccp		; P/V is set until BC = 0
+
+		JP 0100H		; start CCP
+
+read_error:	LD DE,ccp_err_msg
+		LD C,FN_PRINT
+		CALL BDOS
+
+		LD C,FN_CONSOLE_IN	; wait for key
+		CALL BDOS
+
+		JR load_ccp		; try again
+
+		ENDC
+
+init_page0:	LD A,0C3H
+		LD HL,wboot_entry
+		LD (0000H),A
+		LD (0001H),HL
+
+		LD HL,(@mxtpa)
+		LD (0005H),A
+		LD (0006H),HL
+
+		RET
+
+const:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH BC
+		LD C,KBDTL
+		CALL safe_emt
+		POP BC
+		LD SP,(saved_sp)
+		RET
+
+conin:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH BC
+		LD C,KBDW
+		CALL safe_emt
+		POP BC
+		LD SP,(saved_sp)
+		RET
+
+conout:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH BC
+		PUSH AF
+		LD A,C
+		LD C,OUTC
+		CALL safe_emt
+		POP AF
+		POP BC
+		LD SP,(saved_sp)
+		RET
+
+home:		LD IX,unit
+		LD (IX+1),0
+		RET
+
+seldsk:		PUSH BC
+		LD B,0
+		SLA C
+		LD IX,drive_table
+		ADD IX,BC
+		LD H,(IX+1)
+		LD L,(IX+0)
+		POP BC
+		LD IX,unit
+		LD (IX+0),C
+		SET 5,(IX+0)
+		RET
+
+settrk:		LD IX,unit
+		LD (IX+1),C
+		RET
+
+setsec:		LD IX,unit
+		LD (IX+2),C
+		RET
+
+setdma:		LD (address),BC
+		LD (buffer_addr),BC
+		RET
+
+read:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH BC
+		LD IX,unit
+		LD C,RDSECL
+		LD A,(dma_bank)
+		CP 1
+		JR Z,read_no_cpy	; can read directly into dest
+		PUSH HL
+		LD HL,common_buffer	; otherwise use common buffer
+		LD (address),HL
+		CALL safe_emt
+		PUSH DE
+		PUSH AF
+		LD DE,(buffer_addr)
+		LD BC,128
+		LDIR			; copy buffer to dest
+		POP AF
+		POP DE
+		POP HL
+		JR read_done
+read_no_cpy:	CALL safe_emt
+read_done:	LD A,1			; return 1 if an error occured
+		JR NZ,read_ret		
+		XOR A			; return 0 on sucess
+read_ret:	POP BC
+		LD SP,(saved_sp)
+		RET
+
+flushdsk:	RET
+		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH BC
+		LD IX,flush_unit
+		LD C,FLUSH
+		CALL safe_emt
+		JR check_write
+
+write:		LD IX,unit
+		EMT WRSECL
+check_write:	JR Z,write_ok
+		BIT 6,A
+		LD A,1		; return 1 for general failure
+		RET Z		; (write protect bit not set)
+		RET C		; (IDC protocol error)
+		INC A
+		RET		; return 2 if disc write protected
+write_ok:	XOR A
+		RET		; return 0 on sucess
+
+sectrn:		PUSH BC		; no need for translation
+		POP HL
+		INC L		; but sectors start from 1 (not 0)
+		RET
+
+conost:		LD A,0FFH
+		RET
+
+getdrv:		LD HL,drive_table
+		RET
+
+multio:		RET
+
+move:		EX DE,HL
+		LDIR
+		EX DE,HL
+		RET
+
+bnksel:		LD (current_bank),A
+switch_bnk:	PUSH BC
+		LD BC,PORT0
+		CP 1
+		JR Z,sel_bank1
+sel_bank0:	DI
+		LD A,4
+		OUT (C),A
+		INC B
+		INC A
+		OUT (C),A
+		POP BC
+		RET
+sel_bank1:	LD A,1
+		OUT (C),A
+		INC B
+		INC A
+		OUT (C),A
+		EI
+		POP BC
+		RET
+
+setbnk:		LD (dma_bank),A
+		RET
+
+not_supported:
+list:
+auxout:
+auxin:
+listst:
+auxist:
+auxost:
+devtbl:
+cinit:
+time:
+xmove:		RET
+
+safe_emt:	PUSH AF
+		PUSH HL
+		LD HL,current_bank
+		LD A,1
+		CP (HL)
+		POP HL
+		JR Z,quick_emt
+		CALL switch_bnk
+		POP AF
+		EMT CHAN
+		PUSH AF
+		LD A,0
+		CALL switch_bnk
+		POP AF
+		RET
+
+quick_emt:	POP AF
+		EMT CHAN
+		RET
+
+drive_table:	DEFW dph0,dph1,dph2,dph3
+		DEFW 0,0,0,0,0,0,0,0,0,0,0,0
+
+dph0:		DEFW 0			; XLT
+		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
+		DEFB 0			; MF
+		DEFW dpb		; DPB
+		DEFW 0FFFEH		; CSV (generated by GENCPM)
+		DEFW 0FFFEH		; ALV (generated by GENCPM)
+		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
+		DEFW 0FFFFH		; DTABCB (not used)
+		DEFW 0FFFEH		; HASH (generated by GENCPM)
+		DEFW 0			; HBANK (not used)
+
+dph1:		DEFW 0			; XLT
+		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
+		DEFB 0			; MF
+		DEFW dpb		; DPB
+		DEFW 0FFFEH		; CSV (generated by GENCPM)
+		DEFW 0FFFEH		; ALV (generated by GENCPM)
+		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
+		DEFW 0FFFFH		; DTABCB (not used)
+		DEFW 0FFFEH		; HASH (generated by GENCPM)
+		DEFW 0			; HBANK (not used)
+
+dph2:		DEFW 0			; XLT
+		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
+		DEFB 0			; MF
+		DEFW dpb		; DPB
+		DEFW 0FFFEH		; CSV (generated by GENCPM)
+		DEFW 0FFFEH		; ALV (generated by GENCPM)
+		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
+		DEFW 0FFFFH		; DTABCB (not used)
+		DEFW 0FFFEH		; HASH (generated by GENCPM)
+		DEFW 0			; HBANK (not used)
+
+dph3:		DEFW 0			; XLT
+		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
+		DEFB 0			; MF
+		DEFW dpb		; DPB
+		DEFW 0FFFEH		; CSV (generated by GENCPM)
+		DEFW 0FFFEH		; ALV (generated by GENCPM)
+		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
+		DEFW 0FFFFH		; DTABCB (not used)
+		DEFW 0FFFEH		; HASH (generated by GENCPM)
+		DEFW 0			; HBANK (not used)
+
+dpb:		DEFW 36		; SPT
+		DEFB 3		; BSH
+		DEFB 7		; BLM
+		DEFB 0		; EXM
+		DEFW 170	; DSM
+		DEFW 63		; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 16		; CKS
+		DEFW 3		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
+
+		COND CCP_IN_RAM
+
+ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc$'
+
+		ELSE
+
+ccp_err_msg:	DEFB 13
+		DEFM 'ERROR Check System Disc in A, press <RETURN>$'
+ccp_identifier:	DEFM 'LOADER'
+
+		ENDC
+
+unit:		DEFB 00100000B
+track:		DEFB 2
+sector:		DEFB 1
+address:	DEFW 0100H
+
+flush_unit:	DEFB 00001000B
+
+current_bank:	DEFB 1
+dma_bank:	DEFS 1
+
+buffer_addr:	DEFS 2
+common_buffer:	DEFS 128
+
+saved_sp:	DEFS 2
+
+		DEFS 64
+bios_stack:
+
+		DSEG
+
+sign_on:	DEFB 13
+		DEFM 'CP/M Plus (3.0) for RM 480Z'
+		DEFB 13,13
+		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
+		DEFB 13,13,-1
