@@ -1,14 +1,11 @@
 TARGETS = cpmldr.com \
           coldboot.com \
-	  install.com \
-	  cpm3.sys
+          install.com \
+          cpm3.sys
 
 all: $(TARGETS)
 
 %.zsm : _%.zsm
-	tnylpo-convert -u $< -c $@
-
-% : _%
 	tnylpo-convert -u $< -c $@
 
 %.rel : %.zsm
@@ -16,6 +13,12 @@ all: $(TARGETS)
 
 %.com : %.zsm
 	tnylpo zasm $*.aaa
+
+banked: gencpm_banked.dat
+	tnylpo-convert -u $< -c gencpm.dat
+
+nonbanked: gencpm_nonbanked.dat
+	tnylpo-convert -u $< -c gencpm.dat
 
 cpmldr.com : cpmldr.rel ldrbios.rel
 	tnylpo link cpmldr,ldrbios
@@ -26,7 +29,7 @@ bios3.spr : bios3.rel scb.rel
 bnkbios3.spr : bnkbios3.rel scb.rel
 	tnylpo link bnkbios3[b]=bnkbios3,scb
 
-cpm3.sys : bios3.spr bnkbios3.spr bdos3.spr gencpm.dat
+cpm3.sys : bios3.spr bnkbios3.spr bdos3.spr bnkbdos3.spr resbdos3.spr gencpm.dat
 	tnylpo gencpm auto
 
 install: test.imd ccp.com $(TARGETS)
@@ -34,4 +37,4 @@ install: test.imd ccp.com $(TARGETS)
 	cpmcp -f rm-dd $^ 0:
 
 clean:
-	rm $(TARGETS)
+	rm $(TARGETS) gencpm.dat *bios*.rel *bios*.spr
