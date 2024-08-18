@@ -72,23 +72,23 @@ boot:		LD SP,bios_stack
 		LD A,4
 		OUT (C),A
 
+		PUSH BC
 		LD DE,8000H	; move first 16K of system block
 		LD HL,0000H
 		LD BC,4000H
 		LDIR
+		POP BC
 
-		LD B,2		; map RAM bank 5 to 8000H
-		LD C,PORT0
-		LD A,5
+		INC A		; map RAM bank 5 to 8000H
 		OUT (C),A
 
+		PUSH BC
 		LD DE,8000H	; move second 16K of system block
 		LD BC,4000H
 		LDIR
+		POP BC
 
-		LD B,2		; map RAM bank 3 back to 8000H
-		LD C,PORT0
-		LD A,3
+		LD A,3		; map RAM bank 3 back to 8000H
 		OUT (C),A
 		EI
 
@@ -135,6 +135,8 @@ read_error:	LD HL,ccp_err_msg
 		CSEG
 
 wboot:		LD SP,bios_stack
+		LD A,1			; make sure we are in bank 1
+		CALL switch_bnk
 		CALL init_page0
 
 		LD A,1			; set 80 column mode in case changed
@@ -208,7 +210,9 @@ home:		LD IX,unit
 		LD (IX+1),0
 		RET
 
-seldsk:		PUSH BC
+seldsk:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH BC
 		LD B,0
 		SLA C
 		LD IX,drive_table
@@ -219,6 +223,7 @@ seldsk:		PUSH BC
 		LD IX,unit
 		LD (IX+0),C
 		SET 5,(IX+0)
+		LD SP,(saved_sp)
 		RET
 
 settrk:		LD IX,unit
@@ -244,8 +249,6 @@ sectrn:		LD H,B		; no need for translation
 getdrv:		LD HL,drive_table
 		RET
 
-		CSEG
-
 read:		LD (saved_sp),SP
 		LD SP,bios_stack
 		PUSH BC
@@ -258,6 +261,7 @@ read:		LD (saved_sp),SP
 		LD HL,common_buffer	; otherwise use common buffer
 		LD (address),HL
 		CALL safe_emt
+		JR NZ,read_skip		; skip buffer copy on failure
 		PUSH DE
 		PUSH AF
 		LD DE,(buffer_addr)
@@ -265,7 +269,7 @@ read:		LD (saved_sp),SP
 		LDIR			; copy buffer to dest
 		POP AF
 		POP DE
-		POP HL
+read_skip:	POP HL
 		JR read_done
 read_no_cpy:	CALL safe_emt
 read_done:	LD A,1			; return 1 if an error occured
@@ -275,8 +279,7 @@ read_ret:	POP BC
 		LD SP,(saved_sp)
 		RET
 
-flushdsk:	RET
-		LD (saved_sp),SP
+flushdsk:	LD (saved_sp),SP
 		LD SP,bios_stack
 		PUSH BC
 		LD IX,flush_unit
@@ -284,24 +287,50 @@ flushdsk:	RET
 		CALL safe_emt
 		JR check_write
 
-write:		LD IX,unit
-		EMT WRSECL
+write:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH BC
+		LD A,(dma_bank)
+		CP 1
+		JR Z,do_write		; no need to copy buffer
+		PUSH DE
+		PUSH HL
+		LD DE,common_buffer
+		LD HL,(address)
+		LD BC,128
+		LD (address),de
+		LDIR			; copy buffer to common area
+		POP HL
+		POP DE
+do_write:	LD C,WRSECL
+		LD IX,unit
+		CALL safe_emt
 check_write:	JR Z,write_ok
 		BIT 6,A
-		LD A,1		; return 1 for general failure
-		RET Z		; (write protect bit not set)
-		RET C		; (IDC protocol error)
+		LD A,1			; return 1 for general failure
+		JR Z,write_ret		; (write protect bit not set)
+		JR C,write_ret		; (IDC protocol error)
 		INC A
-		RET		; return 2 if disc write protected
+		JR write_ret		; return 2 if disc write protected
 write_ok:	XOR A
-		RET		; return 0 on sucess
+write_ret:	POP BC
+		LD SP,(saved_sp)
+		RET			; return 0 on sucess
+
+		CSEG
 
 move:		EX DE,HL
 		LDIR
 		EX DE,HL
 		RET
 
-bnksel:		LD (current_bank),A
+bnksel:		LD (saved_sp),SP
+		LD SP,bios_stack
+		LD (current_bank),A
+		CALL switch_bnk
+		LD SP,(saved_sp)
+		RET
+
 switch_bnk:	PUSH BC
 		LD BC,PORT0
 		CP 1
@@ -321,7 +350,6 @@ sel_bank1:	LD A,1
 		OUT (C),A
 		EI
 		POP BC
-		RET
 
 not_supported:
 list:
@@ -431,12 +459,12 @@ common_buffer:	DEFS 128
 
 saved_sp:	DEFS 2
 
-		DEFS 64
+		DEFS 32
 bios_stack:
 
 		DSEG
 
-sign_on:	DEFB 13
+sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13,13
 		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
