@@ -1,5 +1,3 @@
-CCP_IN_RAM	QUERY 'Store CCP in RAM (TRUE/FALSE)'
-
 OUTC		EQU 1
 MSG		EQU 23
 CHAN		EQU 24
@@ -10,14 +8,11 @@ RDSECL		EQU 68
 WRSECL		EQU 69
 FLUSH		EQU 71
 
-BDOS		EQU 0005H
 CCP_LEN		EQU 25
 CCP_SIZE	EQU CCP_LEN * 128
 PORT1_MASK	EQU 0FF01H
 PORT0		EQU 018H
 PORT1		EQU 019H
-FN_CONSOLE_IN	EQU 1
-FN_PRINT	EQU 9
 
 		EXTERNAL @mxtpa
 
@@ -66,6 +61,8 @@ wboot_entry:	JP wboot	; reentry on program exit, warm start
 		JP 0		; reserved for future expansion
 		JP 0		; reserved for future expansion
 
+		DSEG
+
 boot:		LD SP,bios_stack
 		CALL init_page0
 
@@ -97,8 +94,6 @@ boot:		LD SP,bios_stack
 
 		LD HL,sign_on
 		EMT MSG
-
-		COND CCP_IN_RAM
 
 		LD IX,unit		; load CCP from track 2
 		LD HL,(address)
@@ -133,24 +128,17 @@ read_loop:	EMT RDSECL
 
 		JP 0100H		; start CCP
 
-read_error:	LD DE,ccp_err_msg
-		LD C,FN_PRINT
-		CALL BDOS
+read_error:	LD HL,ccp_err_msg
+		EMT MSG
 		HALT			; nothing more we can do
-		
-		ELSE
 
-		JR load_ccp
+		CSEG
 
-		ENDC
-
-wboot:		LD SP,1000H
+wboot:		LD SP,bios_stack
 		CALL init_page0
 
 		LD A,1			; set 80 column mode in case changed
 		EMT WIDTH
-
-		COND CCP_IN_RAM
 
 		LD C,PORT1		; select Page 3 (all RAM)
 		LD A,(PORT1_MASK)
@@ -169,48 +157,6 @@ wboot:		LD SP,1000H
 		EI			; re-enable interrupts
 
 		JP 0100H		; start CCP
-		
-		ELSE
-
-load_ccp:	LD HL,0100H
-		LD BC,128
-		LD IX,unit
-		LD (IX+0),00100000B
-		LD (IX+1),2
-		LD (IX+2),1
-
-read_loop:	LD (address),HL
-		EMT RDSECL
-		JR NZ,read_error
-
-		ADD HL,BC		; advance buffer
-		LD A,(sector)		; increment sector no.
-		INC A
-		LD (sector),A
-		CP CCP_LEN+1
-		JR C,read_loop
-
-		LD DE,0110H		; look for "LOADER" string
-		LD HL,ccp_identifier	; to check if CCP valid
-		LD BC,6			; (not full proof)
-check_ccp:	LD A,(DE)
-		CPI
-		JR NZ,read_error
-		INC DE
-		JP PE,check_ccp		; P/V is set until BC = 0
-
-		JP 0100H		; start CCP
-
-read_error:	LD DE,ccp_err_msg
-		LD C,FN_PRINT
-		CALL BDOS
-
-		LD C,FN_CONSOLE_IN	; wait for key
-		CALL BDOS
-
-		JR load_ccp		; try again
-
-		ENDC
 
 init_page0:	LD A,0C3H
 		LD HL,wboot_entry
@@ -253,6 +199,11 @@ conout:		LD (saved_sp),SP
 		LD SP,(saved_sp)
 		RET
 
+conost:		LD A,0FFH
+		RET
+
+		DSEG
+
 home:		LD IX,unit
 		LD (IX+1),0
 		RET
@@ -281,6 +232,19 @@ setsec:		LD IX,unit
 setdma:		LD (address),BC
 		LD (buffer_addr),BC
 		RET
+
+setbnk:		LD (dma_bank),A
+		RET
+
+sectrn:		LD H,B		; no need for translation
+		LD L,C
+		INC L		; but sectors start from 1 (not 0)
+		RET
+
+getdrv:		LD HL,drive_table
+		RET
+
+		CSEG
 
 read:		LD (saved_sp),SP
 		LD SP,bios_stack
@@ -332,19 +296,6 @@ check_write:	JR Z,write_ok
 write_ok:	XOR A
 		RET		; return 0 on sucess
 
-sectrn:		PUSH BC		; no need for translation
-		POP HL
-		INC L		; but sectors start from 1 (not 0)
-		RET
-
-conost:		LD A,0FFH
-		RET
-
-getdrv:		LD HL,drive_table
-		RET
-
-multio:		RET
-
 move:		EX DE,HL
 		LDIR
 		EX DE,HL
@@ -372,9 +323,6 @@ sel_bank1:	LD A,1
 		POP BC
 		RET
 
-setbnk:		LD (dma_bank),A
-		RET
-
 not_supported:
 list:
 auxout:
@@ -384,6 +332,7 @@ auxist:
 auxost:
 devtbl:
 cinit:
+multio:
 time:
 xmove:		RET
 
@@ -467,18 +416,6 @@ dpb:		DEFW 36		; SPT
 		DEFB 0		; PSH
 		DEFB 0		; PHM
 
-		COND CCP_IN_RAM
-
-ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc$'
-
-		ELSE
-
-ccp_err_msg:	DEFB 13
-		DEFM 'ERROR Check System Disc in A, press <RETURN>$'
-ccp_identifier:	DEFM 'LOADER'
-
-		ENDC
-
 unit:		DEFB 00100000B
 track:		DEFB 2
 sector:		DEFB 1
@@ -504,3 +441,6 @@ sign_on:	DEFB 13
 		DEFB 13,13
 		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13,-1
+
+ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'
+		DEFB -1
