@@ -1,3 +1,7 @@
+; system control block definitions file from Digital Research
+;
+; modified to match syntax expected by ZASM
+
 	GLOBAL @civec, @covec, @aivec, @aovec, @lovec, @bnkbf
 	GLOBAL @crdma, @crdsk, @vinfo, @resel, @fx, @usrcd 
         GLOBAL @mltio, @ermde, @erdsk, @media, @bflgs

@@ -1,3 +1,7 @@
+; Copyright (C) 2024 Robin Sergeant
+;
+; non banked bios
+
 CCP_IN_RAM	QUERY 'Store CCP in RAM (TRUE/FALSE)'
 
 OUTC		EQU 1
