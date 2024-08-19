@@ -463,7 +463,7 @@ common_buffer:	DEFS 128
 
 saved_sp:	DEFS 2
 
-		DEFS 32
+		DEFS 64
 bios_stack:
 
 		DSEG
