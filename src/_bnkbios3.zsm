@@ -237,18 +237,12 @@ seldsk:		LD (saved_sp),SP
 		JR set_unit
 read_info:	LD IX,unit
 		LD (IX+0),C
-		LD C,RDINFO
-		CALL safe_emt
+		CALL get_discinfo
 		POP BC
 		JR Z,rdinfo_ok
 		LD IY,0			; return null DPH on error
 		JR seldsk_ret
-rdinfo_ok:	AND 00000110B		; keep data and track density
-		SLA A			; shift to bits 5 and 6 to
-		SLA A			; form drive unit byte
-		SLA A
-		SLA A
-		OR C			; add drive number to unit
+rdinfo_ok:	OR C			; add drive number to unit
 		LD (HL),A		; store in drive info table
 		LD HL,dpb_sd
 		BIT 5,A
@@ -264,6 +258,17 @@ seldsk_ret:	POP AF
 		PUSH IY			; transfer DPH to HL
 		POP HL
 		LD SP,(saved_sp)
+		RET
+
+get_discinfo:	LD C,RDINFO
+		CALL safe_emt
+		RET NZ			; exit on error
+		AND 00000110B		; keep data and track density
+		SLA A			; shift to bits 5 and 6 to
+		SLA A			; form drive unit byte
+		SLA A
+		SLA A
+		CP A			; set zero flag (success)
 		RET
 
 settrk:		LD IX,unit
@@ -300,30 +305,35 @@ getdrv:		LD HL,drive_table
 read:		LD (saved_sp),SP
 		LD SP,bios_stack
 		PUSH BC
+		PUSH HL
 		LD IX,unit
 		LD C,RDSECL
 		LD A,(dma_bank)
 		CP 1
 		JR Z,read_no_cpy	; can read directly into dest
-		PUSH HL
 		LD HL,common_buffer	; otherwise use common buffer
 		LD (address),HL
 		CALL safe_emt
-		JR NZ,read_skip		; skip buffer copy on failure
+		JR NZ,read_done		; skip buffer copy on failure
 		PUSH DE
-		PUSH AF
 		LD DE,(buffer_addr)
 		LD BC,128
 		LDIR			; copy buffer to dest
-		POP AF
 		POP DE
-read_skip:	POP HL
 		JR read_done
 read_no_cpy:	CALL safe_emt
-read_done:	LD A,1			; return 1 if an error occured
-		JR NZ,read_ret		
-		XOR A			; return 0 on sucess
-read_ret:	POP BC
+read_done:	LD A,0
+		JR Z,read_ret		; return 0 for success
+		CALL get_discinfo
+		JR NZ,read_fail
+		LD HL,unit
+		XOR (HL)		; xor to see if density has changed
+		AND 11111000B		; (ignoring drive number)
+		LD A,0FFH
+		JR NZ,read_ret		; return FF when media changed
+read_fail:	LD A,1			; else return 1 for failure
+read_ret:	POP HL
+		POP BC
 		LD SP,(saved_sp)
 		RET
 
@@ -373,8 +383,8 @@ move:		EX DE,HL
 		RET
 
 bnksel:		LD (current_bank),A
-switch_bnk:	CP 1
-		JR Z,sel_bank1
+switch_bnk:	OR A
+		JR NZ,sel_bank1
 sel_bank0:	LD A,4			; bank 0 maps to blocks 4 and 5
 		DI			; disable interrupts while in bank 0
 		EXX			; preserve BC
@@ -385,8 +395,7 @@ sel_bank0:	LD A,4			; bank 0 maps to blocks 4 and 5
 		OUT (C),A
 		EXX			; restore BC
 		RET
-sel_bank1:	LD A,1			; bank 1 maps to blocks 1 and 2
-		EXX
+sel_bank1:	EXX			; bank 1 maps to blocks 1 and 2
 		LD BC,PORT0
 		OUT (C),A
 		INC B			; increment B to map region 0x4000H to 0x8000H
