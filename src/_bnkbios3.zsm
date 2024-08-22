@@ -283,15 +283,15 @@ setbnk:		LD (dma_bank),A
 
 sectrn:		LD HL,unit
 		BIT 5,(HL)
-		JR Z,translate  ; translate for SD only
+		JR Z,translate		; translate for SD only
 		LD H,B
 		LD L,C
-		INC L		; otherwise just adjust to start from 1
+		INC L			; otherwise just adjust to start from 1
 		RET
 translate:	LD HL,xlt
 		ADD HL,BC
 		LD L,(HL)
-		LD H,0
+		LD H,B			; B will always be zero as < 255 sectors
 		RET
 
 getdrv:		LD HL,drive_table
@@ -372,32 +372,28 @@ move:		EX DE,HL
 		EX DE,HL
 		RET
 
-bnksel:		LD (saved_sp),SP
-		LD SP,bios_stack
-		LD (current_bank),A
-		CALL switch_bnk
-		LD SP,(saved_sp)
-		RET
-
-switch_bnk:	PUSH BC
-		LD BC,PORT0
-		CP 1
+bnksel:		LD (current_bank),A
+switch_bnk:	CP 1
 		JR Z,sel_bank1
-sel_bank0:	DI
-		LD A,4
+sel_bank0:	LD A,4			; bank 0 maps to blocks 4 and 5
+		DI			; disable interrupts while in bank 0
+		EXX			; preserve BC
+		LD BC,PORT0
 		OUT (C),A
-		INC B
-		INC A
+		INC B			; increment B to map region 0x4000H to 0x8000H
+		INC A			; increment A to select block 5
 		OUT (C),A
-		POP BC
+		EXX			; restore BC
 		RET
-sel_bank1:	LD A,1
+sel_bank1:	LD A,1			; bank 1 maps to blocks 1 and 2
+		EXX
+		LD BC,PORT0
 		OUT (C),A
-		INC B
-		INC A
+		INC B			; increment B to map region 0x4000H to 0x8000H
+		INC A			; increment A to select block 2
 		OUT (C),A
-		EI
-		POP BC
+		EXX
+		EI			; enable interrupts again in bank 1
 
 not_supported:
 list:
