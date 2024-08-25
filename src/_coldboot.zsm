@@ -10,9 +10,8 @@ RDSECL		EQU 68
 
 LDR_LEN		EQU 23
 
-		COM
-
-		ORG 80H
+		CSEG
+		ORG 0
 
 		LD IX,unit
 		LD BC,128

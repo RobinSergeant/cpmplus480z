@@ -23,6 +23,9 @@ nonbanked: gencpm_nonbanked.dat
 cpmldr.com : cpmldr.rel ldrbios.rel
 	tnylpo link cpmldr,ldrbios
 
+coldboot.com : coldboot.rel
+	tnylpo link coldboot[L80]
+
 bios3.spr : bios3.rel scb.rel
 	tnylpo link bios3[os]=bios3,scb
 
@@ -37,4 +40,4 @@ install: test.imd ccp.com $(TARGETS)
 	cpmcp -f rm-dd $^ 0:
 
 clean:
-	rm $(TARGETS) gencpm.dat *bios*.rel *bios*.spr
+	rm $(TARGETS) gencpm.dat *bios*.rel *bios*.spr coldboot.rel
