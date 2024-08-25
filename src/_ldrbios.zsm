@@ -75,22 +75,9 @@ read:		EMT RDSECL
 		XOR A
 		RET		; return 0 on sucess
 
-sectrn:		PUSH BC		; no need for translation
-		POP HL
+sectrn:		LD H,B		; no need for translation
+		LD L,C
 		INC L		; but sectors start from 1 (not 0)
-		RET
-
-getdrv:		LD HL,drive_table
-		RET
-
-multio:		RET
-
-flush:		XOR A
-		RET
-
-move:		EX DE,HL
-		LDIR
-		EX DE,HL
 
 not_supported:
 boot:
@@ -108,13 +95,14 @@ auxist:
 auxost:
 devtbl:
 cinit:
+getdrv:
+multio:
+flush:
+move:
 time:
 bnksel:
 setbnk:
 xmove:		RET
-
-drive_table:	DEFW dph0
-		DEFW 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 dph0:		DEFW 0			; XLT
 		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
@@ -131,7 +119,7 @@ dpb:		DEFW 36		; SPT
 		DEFB 3		; BSH
 		DEFB 7		; BLM
 		DEFB 0		; EXM
-		DEFW 170	; DSM
+		DEFW 165	; DSM
 		DEFW 63		; DRM
 		DEFB 0C0H	; AL0
 		DEFB 0		; AL1

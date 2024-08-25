@@ -262,8 +262,8 @@ check_write:	JR Z,write_ok
 write_ok:	XOR A
 		RET		; return 0 on sucess
 
-sectrn:		PUSH BC		; no need for translation
-		POP HL
+sectrn:		LD H,B		; no need for translation
+		LD L,C
 		INC L		; but sectors start from 1 (not 0)
 		RET
 
@@ -344,7 +344,7 @@ dpb:		DEFW 36		; SPT
 		DEFB 3		; BSH
 		DEFB 7		; BLM
 		DEFB 0		; EXM
-		DEFW 170	; DSM
+		DEFW 165	; DSM
 		DEFW 63		; DRM
 		DEFB 0C0H	; AL0
 		DEFB 0		; AL1
