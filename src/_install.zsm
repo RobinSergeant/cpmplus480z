@@ -4,6 +4,7 @@
 
 WRSECL		EQU 69
 FLUSH		EQU 71
+RDINFO		EQU 72
 
 BDOS		EQU 0005H
 FN_PRINT	EQU 9
@@ -13,6 +14,11 @@ FN_READ_SEQ	EQU 20
 FN_DRV_GET	EQU 25
 FN_SET_DMA	EQU 26
 
+BUF_START	EQU 1000H
+BOOT_UNIT_LOC	EQU BUF_START + 002FH
+LDR_UNIT_LOC	EQU BUF_START + 0AC0H
+LDR_DPB_LOC	EQU BUF_START + 0AA3H
+
 		COM
 		ORG 100H
 
@@ -21,34 +27,62 @@ FN_SET_DMA	EQU 26
 		LD (unit),A
 
 		LD IX,unit
+		EMT RDINFO		; read disc info
+		JP NZ,disc_error
+		AND 00000110B		; keep data and track density
+		SLA A			; shift to bits 5 and 6 to
+		SLA A			; match drive unit byte format
+		SLA A
+		SLA A
+		LD (density),A
 
-		CALL process_file	; write cold boot loader to track 0
+		CALL read_file		; write cold boot loader to track 0
+		LD A,(density)
+		LD (BOOT_UNIT_LOC),A	; patch to use correct density
+		CALL write_file
 
-		SET 5,(IX+0)		; set DD bit (only track 0 is SD)
+		LD A,(unit)		; set density (only track 0 is SD)
+		LD HL,density
+		OR (HL)
+		LD (unit),A
 
 		LD HL,ldr_fcb		; write cpmldr to track 1
 		CALL setup_file
-		CALL process_file
+		CALL read_file
+		LD A,(density)
+		BIT 6,A
+		JR Z,cont		; only patch for quad density
+
+		LD (LDR_UNIT_LOC),A	; patch unit byte
+
+		LD DE,LDR_DPB_LOC	; replace DPB
+		LD HL,dpb_qd
+		LD BC,DPB_LEN
+		LDIR
+
+cont:		CALL write_file
 
 		LD HL,ccp_fcb		; write ccp to track 2
 		CALL setup_file
-		CALL process_file
+		CALL read_file
+		CALL write_file
 
 		EMT FLUSH		; flush any unwritten data
 
 		RET
 
 setup_file:	LD (current_fcb),HL
-		LD HL,1000H		; reset buffer pointers
+		LD HL,BUF_START		; reset buffer pointers
 		LD (dma_buffer),HL
 		LD (address),HL
+		LD IX,unit
 		INC (IX+1)		; increment track
 		LD (IX+2),1		; reset sector to 1 (start of next track)
 		LD HL,ok_param		; put new track number in ok string
 		INC (HL)
 		RET
 
-process_file:	LD C,FN_OPEN_FILE
+read_file:	LD C,FN_OPEN_FILE
 		LD DE,(current_fcb)
 		CALL BDOS
 		INC A
@@ -62,7 +96,7 @@ read_loop:	LD C,FN_SET_DMA
 		LD DE,(current_fcb)
 		CALL BDOS
 		CP 0
-		JR NZ,write_loop
+		RET NZ			; reached end of file
 
 		LD HL,sector_count
 		INC (hl)
@@ -72,6 +106,7 @@ read_loop:	LD C,FN_SET_DMA
 		LD (dma_buffer),HL
 		JR read_loop
 
+write_file:	LD IX,unit
 write_loop:	XOR A
 		LD HL,sector_count
 		CP (HL)
@@ -79,6 +114,7 @@ write_loop:	XOR A
 		DEC (HL)
 
 		EMT WRSECL
+		JR NZ,disc_error
 
 		INC (IX+2)		; increment sector
 		LD HL,(address)
@@ -89,6 +125,11 @@ write_loop:	XOR A
 		JR write_loop
 
 not_found:	LD C,FN_PRINT
+		LD DE,not_found_msg
+		CALL BDOS
+		RET
+
+disc_error:	LD C,FN_PRINT
 		LD DE,error_msg
 		CALL BDOS
 		RET
@@ -113,18 +154,37 @@ ccp_fcb:	DEFB 0
 		DEFM 'COM'
 		DEFS 21
 
-dma_buffer:	DEFW 1000H
+dma_buffer:	DEFW BUF_START
 sector_count:	DEFB 0
 current_fcb:	DEFW cold_fcb
 
-error_msg:	DEFM 'File not found'
+not_found_msg:	DEFM 'File not found'
+		DEFB 13,'$'
+
+error_msg:	DEFM 'Disc error'
 		DEFB 13,'$'
 
 ok_msg:		DEFM 'Track '
 ok_param:	DEFM '0 written'
 		DEFB 13,'$'
 
-unit:		DEFB 00000001B
+density:	DEFB 0
+
+unit:		DEFB 0
 track:		DEFB 0
 sector:		DEFB 1
-address:	DEFW 1000H
+address:	DEFW BUF_START
+
+dpb_qd:		DEFW 36		; SPT
+		DEFB 4		; BSH
+		DEFB 15		; BLM
+		DEFB 1		; EXM
+		DEFW 172	; DSM
+		DEFW 127	; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 8000H	; CKS (not required)
+		DEFW 3		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
+DPB_LEN		EQU $ - dpb_qd

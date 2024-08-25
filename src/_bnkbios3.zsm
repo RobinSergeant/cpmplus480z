@@ -101,6 +101,11 @@ boot:		LD SP,bios_stack
 		EMT MSG
 
 		LD IX,unit		; load CCP from track 2
+
+		CALL get_discinfo	; set density for disc
+		JR NZ,read_error
+		LD (unit),A
+
 		LD HL,(address)
 		LD BC,128
 

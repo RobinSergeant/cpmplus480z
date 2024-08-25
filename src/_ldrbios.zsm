@@ -136,11 +136,11 @@ dirbcb:		DEFB 0FFH	; DRV
 		DEFS 2		; SECTOR
 		DEFW buffer	; BUFFAD
 
-alv0:		DEFS 45
-
-buffer:		DEFS 128
-
 unit:		DEFB 00100000B
 track:		DEFB 0
 sector:		DEFB 0
 address:	DEFW 0
+
+alv0:		DEFS 45
+
+buffer:		DEFS 128
