@@ -382,6 +382,9 @@ write_ret:	POP BC
 
 		CSEG
 
+devtbl:		LD HL,chrtbl
+		RET
+
 move:		EX DE,HL
 		LDIR
 		EX DE,HL
@@ -416,7 +419,6 @@ auxin:
 listst:
 auxist:
 auxost:
-devtbl:
 cinit:
 multio:
 time:
@@ -441,6 +443,8 @@ safe_emt:	PUSH AF
 quick_emt:	POP AF
 		EMT CHAN
 		RET
+
+chrtbl:		DEFB 0
 
 drive_table:	DEFW dph0,dph1,dph2,dph3
 		DEFW 0,0,0,0,0,0,0,0,0,0,0,0
