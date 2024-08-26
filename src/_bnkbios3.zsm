@@ -345,10 +345,20 @@ read_ret:	POP HL
 flushdsk:	LD (saved_sp),SP
 		LD SP,bios_stack
 		PUSH BC
-		LD IX,flush_unit
-		LD C,FLUSH
+		LD IX,unit
+do_flush:	LD C,FLUSH
 		CALL safe_emt
-		JR check_write
+		JR Z,flush_ok
+		BIT 6,A
+		LD A,1			; return 1 for general failure
+		JR Z,flush_ret		; (write protect bit not set)
+		JR C,flush_ret		; (IDC protocol error)
+		INC A
+		JR flush_ret		; return 2 if disc write protected
+flush_ok:	XOR A
+flush_ret:	POP BC
+		LD SP,(saved_sp)
+		RET			; return 0 on sucess
 
 write:		LD (saved_sp),SP
 		LD SP,bios_stack
@@ -368,14 +378,17 @@ write:		LD (saved_sp),SP
 do_write:	LD C,WRSECL
 		LD IX,unit
 		CALL safe_emt
-check_write:	JR Z,write_ok
+		JR Z,write_ok
 		BIT 6,A
 		LD A,1			; return 1 for general failure
 		JR Z,write_ret		; (write protect bit not set)
 		JR C,write_ret		; (IDC protocol error)
 		INC A
 		JR write_ret		; return 2 if disc write protected
-write_ok:	XOR A
+write_ok:	LD A,(track)
+		CP 3			; always flush after directory track update
+		JR Z,do_flush		; (hack to prevent data loss)
+		XOR A
 write_ret:	POP BC
 		LD SP,(saved_sp)
 		RET			; return 0 on sucess
@@ -536,8 +549,6 @@ unit:		DEFB 00100000B
 track:		DEFB 2
 sector:		DEFB 1
 address:	DEFW 0100H
-
-flush_unit:	DEFB 00001000B
 
 current_bank:	DEFB 1
 dma_bank:	DEFS 1
