@@ -314,8 +314,8 @@ read:		LD (saved_sp),SP
 		LD IX,unit
 		LD C,RDSECL
 		LD A,(dma_bank)
-		CP 1
-		JR Z,read_no_cpy	; can read directly into dest
+		OR A
+		JR NZ,read_no_cpy	; not bank 0, can read directly into dest
 		LD HL,common_buffer	; otherwise use common buffer
 		LD (address),HL
 		CALL safe_emt
@@ -364,14 +364,14 @@ write:		LD (saved_sp),SP
 		LD SP,bios_stack
 		PUSH BC
 		LD A,(dma_bank)
-		CP 1
-		JR Z,do_write		; no need to copy buffer
+		OR A
+		JR NZ,do_write		; not bank 0, no need to copy buffer
 		PUSH DE
 		PUSH HL
 		LD DE,common_buffer
 		LD HL,(address)
 		LD BC,128
-		LD (address),de
+		LD (address),DE
 		LDIR			; copy buffer to common area
 		POP HL
 		POP DE
@@ -438,17 +438,15 @@ time:
 xmove:		RET
 
 safe_emt:	PUSH AF
-		PUSH HL
-		LD HL,current_bank
-		LD A,1
-		CP (HL)
-		POP HL
-		JR Z,quick_emt
+		LD A,(current_bank)
+		OR A
+		JR NZ,quick_emt		; no need to switch if current bank is 1
+		INC A			; switch to bank 1
 		CALL switch_bnk
 		POP AF
 		EMT CHAN
 		PUSH AF
-		LD A,0
+		XOR A			; switch back to bank 0 after call
 		CALL switch_bnk
 		POP AF
 		RET
