@@ -362,29 +362,37 @@ flush_ret:	POP BC
 
 write:		LD (saved_sp),SP
 		LD SP,bios_stack
-		PUSH BC
 		LD A,(dma_bank)
 		OR A
 		JR NZ,do_write		; not bank 0, no need to copy buffer
-		PUSH DE
-		PUSH HL
+		EXX
 		LD DE,common_buffer
 		LD HL,(address)
 		LD BC,128
 		LD (address),DE
 		LDIR			; copy buffer to common area
-		POP HL
-		POP DE
-do_write:	LD C,WRSECL
+		EXX
+do_write:	PUSH BC
+		LD C,WRSECL
 		LD IX,unit
 		CALL safe_emt
 		JR Z,write_ok
+		JR C,write_fail		; (IDC protocol error)
 		BIT 6,A
-		LD A,1			; return 1 for general failure
-		JR Z,write_ret		; (write protect bit not set)
-		JR C,write_ret		; (IDC protocol error)
-		INC A
-		JR write_ret		; return 2 if disc write protected
+		JR NZ,write_protect	; (write protect bit set)
+		CALL get_discinfo
+		JR NZ,write_fail
+		EXX			; preserve HL
+		LD HL,unit
+		XOR (HL)		; xor to see if density has changed
+		EXX
+		AND 11111000B		; (ignoring drive number)
+		LD A,0FFH		; return FF when media changed
+		JR NZ,write_ret
+write_fail:	LD A,1			; return 1 for general failure
+		JR write_ret
+write_protect:	LD A,2			; return 2 if disc write protected
+		JR write_ret
 write_ok:	LD A,(track)
 		CP 3			; always flush after directory track update
 		JR Z,do_flush		; (hack to prevent data loss)
