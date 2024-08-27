@@ -125,7 +125,7 @@ read_loop:	EMT RDSECL
 		OUT (C),A
 		EI			; re-enable interrupts
 
-		JP 0100H		; start CCP
+		JP start_ccp
 
 read_error:	LD HL,ccp_err_msg
 		EMT MSG
@@ -157,6 +157,9 @@ wboot:		LD SP,bios_stack
 		LD A,(PORT1_MASK)
 		OUT (C),A
 		EI			; re-enable interrupts
+
+start_ccp:	LD HL,cursor_keys	; re-configure cursor keys
+		EMT MSG
 
 		JP 0100H		; start CCP
 
@@ -452,6 +455,11 @@ safe_emt:	PUSH AF
 quick_emt:	POP AF
 		EMT CHAN
 		RET
+
+cursor_keys:	DEFB 27,37,65,1,23	; UP = Ctrl+W
+		DEFB 27,37,68,1,1	; LEFT = Ctrl+A
+		DEFB 27,37,66,1,6	; RIGHT = Ctrl+F
+		DEFB -1
 
 chrtbl:		DEFB 0
 
