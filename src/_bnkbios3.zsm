@@ -72,28 +72,17 @@ boot:		LD SP,bios_stack
 		CALL init_page0
 
 		DI
-		LD B,2		; map RAM bank 4 to 8000H
-		LD C,PORT0
-		LD A,4
+		LD BC,0200H + PORT0	; map RAM bank 5 to 8000H
+		LD A,5
 		OUT (C),A
 
-		PUSH BC
-		LD DE,8000H	; move first 16K of system block
-		LD HL,0000H
-		LD BC,4000H
+		LD DE,8A00H		; copy banked portion of BDOS+BIOS to system block
+		LD HL,4A00H
+		LD BC,3600H
 		LDIR
-		POP BC
 
-		INC A		; map RAM bank 5 to 8000H
-		OUT (C),A
-
-		PUSH BC
-		LD DE,8000H	; move second 16K of system block
-		LD BC,4000H
-		LDIR
-		POP BC
-
-		LD A,3		; map RAM bank 3 back to 8000H
+		LD BC,0200H + PORT0	; map RAM bank 3 back to 8000H
+		LD A,3
 		OUT (C),A
 		EI
 
@@ -572,7 +561,7 @@ bios_stack:
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13,13
-		DEFM 'BIOS v 0.2 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.3 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13,-1
 
 ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'
