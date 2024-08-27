@@ -129,6 +129,7 @@ read_loop:	EMT RDSECL
 
 read_error:	LD HL,ccp_err_msg
 		EMT MSG
+		DI
 		HALT			; nothing more we can do
 
 		CSEG

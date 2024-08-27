@@ -15,12 +15,15 @@ FN_DRV_GET	EQU 25
 FN_SET_DMA	EQU 26
 
 BUF_START	EQU 1000H
-BOOT_UNIT_LOC	EQU BUF_START + 002FH
+BOOT_UNIT_LOC	EQU BUF_START + 0032H
 LDR_UNIT_LOC	EQU BUF_START + 0AC0H
 LDR_DPB_LOC	EQU BUF_START + 0AA3H
 
 		COM
 		ORG 100H
+
+		LD (saved_sp),SP
+		LD SP,stack
 
 		LD C,FN_DRV_GET		; output to selected drive
 		CALL BDOS
@@ -67,8 +70,9 @@ cont:		CALL write_file
 		CALL read_file
 		CALL write_file
 
-		EMT FLUSH		; flush any unwritten data
+exit:		EMT FLUSH		; flush any unwritten data
 
+		LD SP,(saved_sp)
 		RET
 
 setup_file:	LD (current_fcb),HL
@@ -127,12 +131,12 @@ write_loop:	XOR A
 not_found:	LD C,FN_PRINT
 		LD DE,not_found_msg
 		CALL BDOS
-		RET
+		JP exit
 
 disc_error:	LD C,FN_PRINT
 		LD DE,error_msg
 		CALL BDOS
-		RET
+		JP exit
 
 done:		LD C,FN_PRINT
 		LD DE,ok_msg
@@ -188,3 +192,8 @@ dpb_qd:		DEFW 36		; SPT
 		DEFB 0		; PSH
 		DEFB 0		; PHM
 DPB_LEN		EQU $ - dpb_qd
+
+saved_sp:	DEFS 2
+
+		DEFS 32
+stack:
