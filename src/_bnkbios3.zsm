@@ -8,6 +8,7 @@ CHAN		EQU 24
 KBDTL		EQU 31
 KBDW		EQU 33
 WIDTH		EQU 52
+INISYS		EQU 64
 RDSECL		EQU 68
 WRSECL		EQU 69
 FLUSH		EQU 71
@@ -138,6 +139,9 @@ wboot:		LD SP,bios_stack
 		LD A,1			; make sure we are in bank 1
 		CALL switch_bnk
 		CALL init_page0
+
+		LD IX,inisys_byte	; re-initialize IDC buffers
+		EMT INISYS
 
 		LD A,1			; set 80 column mode in case changed
 		EMT WIDTH
@@ -553,6 +557,8 @@ unit:		DEFB 00100000B
 track:		DEFB 2
 sector:		DEFB 1
 address:	DEFW 0100H
+
+inisys_byte:	DEFB 1111000B
 
 current_bank:	DEFB 1
 dma_bank:	DEFS 1
