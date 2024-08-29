@@ -20,7 +20,7 @@ PORT1_MASK	EQU 0FF01H
 PORT0		EQU 018H
 PORT1		EQU 019H
 
-		EXTERNAL @mxtpa
+		EXTERNAL @civec,@covec,@mxtpa
 
 		CSEG
 
@@ -71,6 +71,11 @@ wboot_entry:	JP wboot	; reentry on program exit, warm start
 
 boot:		LD SP,bios_stack
 		CALL init_page0
+
+		LD HL,8000H		; setup device vectors
+		LD (@covec),HL		; console output = CRT
+		SRL H
+		LD (@civec),HL		; console input = KBD
 
 		DI
 		LD BC,0200H + PORT0	; map RAM bank 5 to 8000H
@@ -465,7 +470,13 @@ cursor_keys:	DEFB 27,37,65,1,23	; UP = Ctrl+W
 		DEFB 27,37,66,1,6	; RIGHT = Ctrl+F
 		DEFB -1
 
-chrtbl:		DEFB 0
+chrtbl:		DEFM 'CRT   '
+		DEFB 00000010B
+		DEFB 0
+		DEFM 'KBD   '
+		DEFB 00000001B
+		DEFB 0
+		DEFB 0
 
 drive_table:	DEFW dph0,dph1,dph2,dph3
 		DEFW 0,0,0,0,0,0,0,0,0,0,0,0
