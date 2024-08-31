@@ -227,7 +227,7 @@ seldsk:		LD (saved_sp),SP
 		PUSH AF
 		PUSH BC
 		LD B,0			; find DPH
-		SLA C
+		SLA C			; multiply C by 2 to give table index
 		LD IY,drive_table
 		ADD IY,BC		
 		LD H,(IY+1)
@@ -247,7 +247,7 @@ read_info:	LD IX,unit
 		CALL get_discinfo
 		POP BC
 		JR Z,rdinfo_ok
-		LD IY,0			; return null DPH on error
+		LD HL,0			; return null DPH on error
 		JR seldsk_ret
 rdinfo_ok:	OR C			; add drive number to unit
 		LD (HL),A		; store in drive info table
@@ -261,9 +261,9 @@ rdinfo_ok:	OR C			; add drive number to unit
 set_dpd:	LD (IY+12),L
 		LD (IY+13),H
 set_unit:	LD (unit),A
-seldsk_ret:	POP AF
 		PUSH IY			; transfer DPH to HL
 		POP HL
+seldsk_ret:	POP AF
 		LD SP,(saved_sp)
 		RET
 
@@ -271,10 +271,10 @@ get_discinfo:	LD C,RDINFO
 		CALL safe_emt
 		RET NZ			; exit on error
 		AND 00000110B		; keep data and track density
-		SLA A			; shift to bits 5 and 6 to
-		SLA A			; form drive unit byte
-		SLA A
-		SLA A
+		RLCA			; shift to bits 5 and 6 to
+		RLCA			; form drive unit byte
+		RLCA
+		RLCA
 		CP A			; set zero flag (success)
 		RET
 

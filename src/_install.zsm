@@ -33,10 +33,10 @@ LDR_DPB_LOC	EQU BUF_START + 0AA3H
 		EMT RDINFO		; read disc info
 		JP NZ,disc_error
 		AND 00000110B		; keep data and track density
-		SLA A			; shift to bits 5 and 6 to
-		SLA A			; match drive unit byte format
-		SLA A
-		SLA A
+		RLCA			; shift to bits 5 and 6 to
+		RLCA			; match drive unit byte format
+		RLCA
+		RLCA
 		LD (density),A
 
 		CALL read_file		; write cold boot loader to track 0
