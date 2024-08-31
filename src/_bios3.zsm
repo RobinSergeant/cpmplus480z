@@ -2,25 +2,23 @@
 ;
 ; non banked bios
 
-CCP_IN_RAM	QUERY 'Store CCP in RAM (TRUE/FALSE)'
-
 OUTC		EQU 1
+MSG		EQU 23
 KBDTL		EQU 31
 KBDW		EQU 33
 WIDTH		EQU 52
+INISYS		EQU 64
 RDSECL		EQU 68
 WRSECL		EQU 69
 FLUSH		EQU 71
+RDINFO		EQU 72
 
-BDOS		EQU 0005H
 CCP_LEN		EQU 25
 CCP_SIZE	EQU CCP_LEN * 128
 PORT1_MASK	EQU 0FF01H
 PORT1		EQU 019H
-FN_CONSOLE_IN	EQU 1
-FN_PRINT	EQU 9
 
-		EXTERNAL @mxtpa
+		EXTERNAL @civec,@covec,@mxtpa
 
 		CSEG
 
@@ -67,16 +65,23 @@ wboot_entry:	JP wboot	; reentry on program exit, warm start
 		JP 0		; reserved for future expansion
 		JP 0		; reserved for future expansion
 
-boot:		LD SP,1000H
+boot:		LD SP,4000H
 		CALL init_page0
 
-		LD DE,sign_on
-		LD C,FN_PRINT
-		CALL BDOS
+		LD HL,8000H		; setup device vectors
+		LD (@covec),HL		; console output = CRT
+		SRL H
+		LD (@civec),HL		; console input = KBD
 
-		COND CCP_IN_RAM
+		LD HL,sign_on
+		EMT MSG
 
 		LD IX,unit		; load CCP from track 2
+
+		CALL get_discinfo	; set density for disc
+		JR NZ,read_error
+		LD (unit),A
+
 		LD HL,(address)
 		LD BC,128
 
@@ -109,24 +114,19 @@ read_loop:	EMT RDSECL
 
 		JP 0100H		; start CCP
 
-read_error:	LD DE,ccp_err_msg
-		LD C,FN_PRINT
-		CALL BDOS
+read_error:	LD HL,ccp_err_msg
+		EMT MSG
+		DI
 		HALT			; nothing more we can do
-		
-		ELSE
 
-		JR load_ccp
-
-		ENDC
-
-wboot:		LD SP,1000H
+wboot:		LD SP,bios_stack
 		CALL init_page0
+
+		LD IX,inisys_byte	; re-initialize IDC buffers
+		EMT INISYS
 
 		LD A,1			; set 80 column mode in case changed
 		EMT WIDTH
-
-		COND CCP_IN_RAM
 
 		LD C,PORT1		; select Page 3 (all RAM)
 		LD A,(PORT1_MASK)
@@ -145,48 +145,6 @@ wboot:		LD SP,1000H
 		EI			; re-enable interrupts
 
 		JP 0100H		; start CCP
-		
-		ELSE
-
-load_ccp:	LD HL,0100H
-		LD BC,128
-		LD IX,unit
-		LD (IX+0),00100000B
-		LD (IX+1),2
-		LD (IX+2),1
-
-read_loop:	LD (address),HL
-		EMT RDSECL
-		JR NZ,read_error
-
-		ADD HL,BC		; advance buffer
-		LD A,(sector)		; increment sector no.
-		INC A
-		LD (sector),A
-		CP CCP_LEN+1
-		JR C,read_loop
-
-		LD DE,0110H		; look for "LOADER" string
-		LD HL,ccp_identifier	; to check if CCP valid
-		LD BC,6			; (not full proof)
-check_ccp:	LD A,(DE)
-		CPI
-		JR NZ,read_error
-		INC DE
-		JP PE,check_ccp		; P/V is set until BC = 0
-
-		JP 0100H		; start CCP
-
-read_error:	LD DE,ccp_err_msg
-		LD C,FN_PRINT
-		CALL BDOS
-
-		LD C,FN_CONSOLE_IN	; wait for key
-		CALL BDOS
-
-		JR load_ccp		; try again
-
-		ENDC
 
 init_page0:	LD A,0C3H
 		LD HL,wboot_entry
@@ -199,33 +157,87 @@ init_page0:	LD A,0C3H
 
 		RET
 
-const:		EMT KBDTL
+const:		LD (saved_sp),SP
+		LD SP,bios_stack
+		EMT KBDTL
+		LD SP,(saved_sp)
 		RET
 
-conin:		EMT KBDW
+conin:		LD (saved_sp),SP
+		LD SP,bios_stack
+		EMT KBDW
+		LD SP,(saved_sp)
 		RET
 
-conout:		PUSH AF
+conout:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH AF
 		LD A,C
 		EMT OUTC
 		POP AF
+		LD SP,(saved_sp)
+		RET
+
+conost:		LD A,0FFH
 		RET
 
 home:		LD IX,unit
 		LD (IX+1),0
 		RET
 
-seldsk:		PUSH BC
-		LD B,0
-		SLA C
-		LD IX,drive_table
-		ADD IX,BC
-		LD H,(IX+1)
-		LD L,(IX+0)
+seldsk:		LD (saved_sp),SP
+		LD SP,bios_stack
+		PUSH AF
+		PUSH BC
+		LD B,0			; find DPH
+		SLA C			; multiply C by 2 to give table index
+		LD IY,drive_table
+		ADD IY,BC		
+		LD H,(IY+1)
+		LD L,(IY+0)
+		PUSH HL
+		POP IY			; IY now contains address of DPH
+		SRL C
+		LD HL,drive_info
+		ADD HL,BC		; HL contains location for stored unit byte
+		BIT 0,E
+		JR Z,read_info		; Read disc info when bit 0 unset
 		POP BC
-		LD IX,unit
+		LD A,(HL)		; else reuse data previously found for drive
+		JR set_unit
+read_info:	LD IX,unit
 		LD (IX+0),C
-		SET 5,(IX+0)
+		CALL get_discinfo
+		POP BC
+		JR Z,rdinfo_ok
+		LD HL,0			; return null DPH on error
+		JR seldsk_ret
+rdinfo_ok:	OR C			; add drive number to unit
+		LD (HL),A		; store in drive info table
+		LD HL,dpb_sd
+		BIT 5,A
+		JR Z,set_dpd		; use SD when bit 5 clear
+		LD HL,dpb_dd
+		BIT 6,A
+		JR Z,set_dpd		; use DD when bit 6 clear
+		LD HL,dpb_qd		; else use QD
+set_dpd:	LD (IY+12),L
+		LD (IY+13),H
+set_unit:	LD (unit),A
+		PUSH IY			; transfer DPH to HL
+		POP HL
+seldsk_ret:	POP AF
+		LD SP,(saved_sp)
+		RET
+
+get_discinfo:	EMT RDINFO
+		RET NZ			; exit on error
+		AND 00000110B		; keep data and track density
+		RLCA			; shift to bits 5 and 6 to
+		RLCA			; form drive unit byte
+		RLCA
+		RLCA
+		CP A			; set zero flag (success)
 		RET
 
 settrk:		LD IX,unit
@@ -239,41 +251,86 @@ setsec:		LD IX,unit
 setdma:		LD (address),BC
 		RET
 
-read:		LD IX,unit
-		EMT RDSECL
-		LD A,1
-		RET NZ		; return 1 if an error occured
-		XOR A
-		RET		; return 0 on sucess
-
-flushdsk:	LD IX,flush_unit
-		EMT FLUSH
-		JR check_write
-
-write:		LD IX,unit
-		EMT WRSECL
-check_write:	JR Z,write_ok
-		BIT 6,A
-		LD A,1		; return 1 for general failure
-		RET Z		; (write protect bit not set)
-		RET C		; (IDC protocol error)
-		INC A
-		RET		; return 2 if disc write protected
-write_ok:	XOR A
-		RET		; return 0 on sucess
-
-sectrn:		LD H,B		; no need for translation
+sectrn:		LD HL,unit
+		BIT 5,(HL)
+		JR Z,translate		; translate for SD only
+		LD H,B
 		LD L,C
-		INC L		; but sectors start from 1 (not 0)
+		INC L			; otherwise just adjust to start from 1
 		RET
-
-conost:		LD A,0FFH
+translate:	LD HL,xlt
+		ADD HL,BC
+		LD L,(HL)
+		LD H,B			; B will always be zero as < 255 sectors
 		RET
 
 getdrv:		LD HL,drive_table
 		RET
 
-multio:		RET
+read:		LD (saved_sp),SP
+		LD SP,bios_stack
+		LD IX,unit
+		EMT RDSECL
+		LD A,0
+		JR Z,read_ret		; return 0 for success
+		CALL get_discinfo
+		JR NZ,read_fail
+		PUSH HL
+		LD HL,unit
+		XOR (HL)		; xor to see if density has changed
+		POP HL
+		AND 11111000B		; (ignoring drive number)
+		LD A,0FFH
+		JR NZ,read_ret		; return FF when media changed
+read_fail:	LD A,1			; else return 1 for failure
+read_ret:	LD SP,(saved_sp)
+		RET
+
+flushdsk:	LD (saved_sp),SP
+		LD SP,bios_stack
+		LD IX,unit
+do_flush:	EMT FLUSH
+		JR Z,flush_ok
+		BIT 6,A
+		LD A,1			; return 1 for general failure
+		JR Z,flush_ret		; (write protect bit not set)
+		JR C,flush_ret		; (IDC protocol error)
+		INC A
+		JR flush_ret		; return 2 if disc write protected
+flush_ok:	XOR A
+flush_ret:	LD SP,(saved_sp)
+		RET			; return 0 on sucess
+
+write:		LD (saved_sp),SP
+		LD SP,bios_stack
+		LD IX,unit
+		EMT WRSECL
+		JR Z,write_ok
+		JR C,write_fail		; (IDC protocol error)
+		BIT 6,A
+		JR NZ,write_protect	; (write protect bit set)
+		CALL get_discinfo
+		JR NZ,write_fail
+		PUSH HL
+		LD HL,unit
+		XOR (HL)		; xor to see if density has changed
+		POP HL
+		AND 11111000B		; (ignoring drive number)
+		LD A,0FFH		; return FF when media changed
+		JR NZ,write_ret
+write_fail:	LD A,1			; return 1 for general failure
+		JR write_ret
+write_protect:	LD A,2			; return 2 if disc write protected
+		JR write_ret
+write_ok:	LD A,(track)
+		CP 3			; always flush after directory track update
+		JR Z,do_flush		; (hack to prevent data loss)
+		XOR A
+write_ret:	LD SP,(saved_sp)
+		RET			; return 0 on sucess
+
+devtbl:		LD HL,chrtbl
+		RET
 
 move:		EX DE,HL
 		LDIR
@@ -286,12 +343,20 @@ auxin:
 listst:
 auxist:
 auxost:
-devtbl:
 cinit:
+multio:
 time:
 bnksel:
 setbnk:
 xmove:		RET
+
+chrtbl:		DEFM 'CRT   '
+		DEFB 00000010B
+		DEFB 0
+		DEFM 'KBD   '
+		DEFB 00000001B
+		DEFB 0
+		DEFB 0
 
 drive_table:	DEFW dph0,dph1,dph2,dph3
 		DEFW 0,0,0,0,0,0,0,0,0,0,0,0
@@ -299,7 +364,7 @@ drive_table:	DEFW dph0,dph1,dph2,dph3
 dph0:		DEFW 0			; XLT
 		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
 		DEFB 0			; MF
-		DEFW dpb		; DPB
+		DEFW dpb_qd		; DPB
 		DEFW 0FFFEH		; CSV (generated by GENCPM)
 		DEFW 0FFFEH		; ALV (generated by GENCPM)
 		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
@@ -310,7 +375,7 @@ dph0:		DEFW 0			; XLT
 dph1:		DEFW 0			; XLT
 		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
 		DEFB 0			; MF
-		DEFW dpb		; DPB
+		DEFW dpb_qd		; DPB
 		DEFW 0FFFEH		; CSV (generated by GENCPM)
 		DEFW 0FFFEH		; ALV (generated by GENCPM)
 		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
@@ -321,7 +386,7 @@ dph1:		DEFW 0			; XLT
 dph2:		DEFW 0			; XLT
 		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
 		DEFB 0			; MF
-		DEFW dpb		; DPB
+		DEFW dpb_qd		; DPB
 		DEFW 0FFFEH		; CSV (generated by GENCPM)
 		DEFW 0FFFEH		; ALV (generated by GENCPM)
 		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
@@ -332,7 +397,7 @@ dph2:		DEFW 0			; XLT
 dph3:		DEFW 0			; XLT
 		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
 		DEFB 0			; MF
-		DEFW dpb		; DPB
+		DEFW dpb_qd		; DPB
 		DEFW 0FFFEH		; CSV (generated by GENCPM)
 		DEFW 0FFFEH		; ALV (generated by GENCPM)
 		DEFW 0FFFEH		; DIRBCB (generated by GENCPM)
@@ -340,7 +405,7 @@ dph3:		DEFW 0			; XLT
 		DEFW 0FFFEH		; HASH (generated by GENCPM)
 		DEFW 0			; HBANK (not used)
 
-dpb:		DEFW 36		; SPT
+dpb_dd:		DEFW 36		; SPT
 		DEFB 3		; BSH
 		DEFB 7		; BLM
 		DEFB 0		; EXM
@@ -353,27 +418,52 @@ dpb:		DEFW 36		; SPT
 		DEFB 0		; PSH
 		DEFB 0		; PHM
 
-sign_on:	DEFB 31
-		DEFM 'CP/M Plus (3.0) for RM 480Z'
-		DEFB 13,13
-		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
-		DEFB 13,13,'$'
+dpb_qd:		DEFW 36		; SPT
+		DEFB 4		; BSH
+		DEFB 15		; BLM
+		DEFB 1		; EXM
+		DEFW 172	; DSM
+		DEFW 127	; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 32		; CKS
+		DEFW 3		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
 
-		COND CCP_IN_RAM
-
-ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc$'
-
-		ELSE
-
-ccp_err_msg:	DEFB 13
-		DEFM 'ERROR Check System Disc in A, press <RETURN>$'
-ccp_identifier:	DEFM 'LOADER'
-
-		ENDC
+dpb_sd:		DEFW 16		; SPT
+		DEFB 3		; BSH
+		DEFB 7		; BLM
+		DEFB 0		; EXM
+		DEFW 73		; DSM
+		DEFW 63		; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 16		; CKS
+		DEFW 3		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
 
 unit:		DEFB 00100000B
 track:		DEFB 2
 sector:		DEFB 1
 address:	DEFW 0100H
 
-flush_unit:	DEFB 00001000B
+inisys_byte:	DEFB 1111000B
+
+saved_sp:	DEFS 2
+
+sign_on:	DEFB 31
+		DEFM 'CP/M Plus (3.0) for RM 480Z'
+		DEFB 13,13
+		DEFM 'BIOS v 0.3 Copyright (C) 2024, Robin Sergeant'
+		DEFB 13,13,-1
+
+ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'
+		DEFB -1
+
+bios_stack:
+
+xlt:		DEFB 1,4,7,10,13,16,3,6,9,12,15,2,5,8,11,14
+
+drive_info:	DEFS 4

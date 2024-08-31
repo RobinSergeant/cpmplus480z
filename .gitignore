@@ -5,6 +5,9 @@
 *.rel
 *.imd
 *.mfi
+*.mfm
 *.spr
 *.sym
 *.sys
+*.txt
+*.zip
