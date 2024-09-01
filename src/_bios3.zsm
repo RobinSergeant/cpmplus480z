@@ -192,7 +192,7 @@ seldsk:		LD (saved_sp),SP
 		LD B,0			; find DPH
 		SLA C			; multiply C by 2 to give table index
 		LD IY,drive_table
-		ADD IY,BC		
+		ADD IY,BC
 		LD H,(IY+1)
 		LD L,(IY+0)
 		PUSH HL
