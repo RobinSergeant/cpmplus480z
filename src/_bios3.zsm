@@ -69,9 +69,8 @@ boot:		LD SP,4000H
 		CALL init_page0
 
 		LD HL,8000H		; setup device vectors
-		LD (@covec),HL		; console output = CRT
-		SRL H
-		LD (@civec),HL		; console input = KBD
+		LD (@covec),HL
+		LD (@civec),HL
 
 		LD HL,sign_on
 		EMT MSG
@@ -350,11 +349,8 @@ bnksel:
 setbnk:
 xmove:		RET
 
-chrtbl:		DEFM 'CRT   '
-		DEFB 00000010B
-		DEFB 0
-		DEFM 'KBD   '
-		DEFB 00000001B
+chrtbl:		DEFM 'TERM  '
+		DEFB 00000011B
 		DEFB 0
 		DEFB 0
 
@@ -455,7 +451,7 @@ saved_sp:	DEFS 2
 
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
-		DEFB 13,13
+		DEFB 13
 		DEFM 'BIOS v 0.3 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13,-1
 

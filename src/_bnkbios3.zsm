@@ -73,9 +73,8 @@ boot:		LD SP,bios_stack
 		CALL init_page0
 
 		LD HL,8000H		; setup device vectors
-		LD (@covec),HL		; console output = CRT
-		SRL H
-		LD (@civec),HL		; console input = KBD
+		LD (@covec),HL
+		LD (@civec),HL
 
 		DI
 		LD BC,PORT0		; map RAM bank 5 to 0000H
@@ -328,11 +327,11 @@ translate:	LD HL,xlt
 getdrv:		LD HL,drive_table
 		RET
 
-read:		LD (saved_sp),SP
-		LD SP,bios_stack
-		LD IX,unit
+read:		LD IX,unit
 		BIT 3,(IX+0)
-		JP NZ,rdisk_read
+		JP NZ,rdisk_read	; ram disk
+		LD (saved_sp),SP
+		LD SP,bios_stack
 		PUSH BC
 		PUSH HL
 		LD C,RDSECL
@@ -385,11 +384,11 @@ flush_ret:	POP BC
 		LD SP,(saved_sp)
 		RET			; return 0 on sucess
 
-write:		LD (saved_sp),SP
-		LD SP,bios_stack
-		LD IX,unit
+write:		LD IX,unit
 		BIT 3,(IX+0)
-		JP NZ,rdisk_write
+		JP NZ,rdisk_write	; ram disk
+		LD (saved_sp),SP
+		LD SP,bios_stack
 		LD A,(dma_bank)
 		OR A
 		JR NZ,do_write		; not bank 0, no need to copy buffer
@@ -428,129 +427,82 @@ write_ret:	POP BC
 		LD SP,(saved_sp)
 		RET			; return 0 on sucess
 
-		CSEG
+rdisk_read:	LD A,0EBH		; opcode for EX DE,HL
+		JR rdisk_copy
 
-rdisk_read:	EXX
-		LD DE,(address)
-		LD A,(dma_bank)
-		OR A
-		JR Z,1$
+rdisk_write:	XOR A			; opcode for NOP
+		JR rdisk_copy
 
-		LD A,(address+1)
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		INC A
-		AND 3
+rdisk_copy:	EXX
+		LD (rdisk_op),A		; self modifying code
 
-		LD BC,PORT0
-		OUT (C),A
-		INC A
-		AND 3
-		INC B
+		LD C,PORT1		; select Page 3 (all RAM)
+		LD A,(PORT1_MASK)
+		OR 3
 		OUT (C),A
 
-		LD A,(address+1)
-		AND 00111111B
-		LD D,A
-
-1$:		LD BC,0200H + PORT0
+		LD BC,PORT0		; map track block to 0x0000
 		LD A,(track)
 		OUT (C),A
 
-		LD HL,8000H
-		LD A,(sector)
-		LD B,A
-		LD C,0
-		SRL B			; divide sector by 2 to find page number
-		RR C			; use remainder to index page (0x00 or 0x80)
-		ADD HL,BC
-		LD BC,128
+		LD HL,8000H		; set HL to start of data block
+		LD DE,(address)
+		LD A,D
+		AND 00111111B
+		LD D,A			; convert address to offset
+		ADD HL,DE		; then add to find start of data
+
+		LD A,(sector)		; set DE to address of sector
+		LD D,A
+		LD E,0
+		SRL D			; divide sector by 2 to find page number
+		RR E			; use remainder to index page (0x00 or 0x80)
+
+		LD A,(dma_bank)
+		OR A
+		LD A,4
+		JR Z,1$			; dma_bank 0 so copy from block 4
+
+		LD A,(address+1)	; else find block to copy
+		SRL A
+		SRL A
+		SRL A
+		SRL A
+		SRL A
+		SRL A
+		INC A
+		AND 3
+
+1$:		LD BC,0200H + PORT0	; map block to copy to 0x8000
+		OUT (C),A
+		INC A
+		CP 4
+		JR NZ,2$
+		XOR A			; block 0 follows block 3
+2$:		INC B
+		OUT (C),A
+
+		LD BC,128		; copy a whole sector
+rdisk_op:	EX DE,HL
 		LDIR
+
+		LD C,PORT0		; restore memory layout
+		LD A,4
+		OUT (C),A
 
 		LD BC,0200H + PORT0
 		LD A,3
 		OUT (C),A
-
-		LD A,(dma_bank)
-		OR A
-		JR Z,2$
-
-		LD BC,PORT0
-		LD A,4
-		OUT (C),A
-		INC A
 		INC B
-		OUT (C),A			
-
-2$:		EXX
-		XOR A
-		LD SP,(saved_sp)
-		RET
-
-rdisk_write:	EXX
-		LD DE,(address)
-		LD A,(dma_bank)
-		OR A
-		JR Z,1$
-
-		LD A,(address+1)
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		INC A
-		AND 3
-
-		LD BC,PORT0
-		OUT (C),A
-		INC A
-		AND 3
-		INC B
+		XOR A			; block 0 follows block 3
 		OUT (C),A
 
-		LD A,(address+1)
-		AND 00111111B
-		LD D,A
-
-1$:		LD BC,0200H + PORT0
-		LD A,(track)
+		LD C,PORT1		; return to Page 1
+		LD A,(PORT1_MASK)
 		OUT (C),A
 
-		LD HL,8000H
-		LD A,(sector)
-		LD B,A
-		LD C,0
-		SRL B			; divide sector by 2 to find page number
-		RR C			; use remainder to index page (0x00 or 0x80)
-		ADD HL,BC
-		LD BC,128
-		EX DE,HL
-		LDIR
-
-		LD BC,0200H + PORT0
-		LD A,3
-		OUT (C),A
-
-		LD A,(dma_bank)
-		OR A
-		JR Z,2$
-
-		LD BC,PORT0
-		LD A,4
-		OUT (C),A
-		INC A
-		INC B
-		OUT (C),A
-
-2$:		EXX
-		XOR A
-		LD SP,(saved_sp)
+		EXX
+		XOR A			; return 0 for success
 		RET
 
 		CSEG
@@ -620,11 +572,8 @@ cursor_keys:	DEFB 27,37,65,1,23	; UP = Ctrl+W
 		DEFB 27,37,66,1,6	; RIGHT = Ctrl+F
 		DEFB -1
 
-chrtbl:		DEFM 'CRT   '
-		DEFB 00000010B
-		DEFB 0
-		DEFM 'KBD   '
-		DEFB 00000001B
+chrtbl:		DEFM 'TERM  '
+		DEFB 00000011B
 		DEFB 0
 		DEFB 0
 
@@ -747,9 +696,6 @@ address:	DEFW 0100H
 
 inisys_byte:	DEFB 1111000B
 
-current_bank:	DEFB 1
-dma_bank:	DEFS 1
-
 buffer_addr:	DEFS 2
 common_buffer:	DEFS 128
 
@@ -757,6 +703,9 @@ saved_sp:	DEFS 2
 
 		DEFS 64
 bios_stack:
+
+current_bank:	DEFB 1
+dma_bank:	DEFB 0
 
 		DSEG
 
