@@ -464,13 +464,10 @@ rdisk_copy:	EXX
 		JR Z,1$			; dma_bank 0 so copy from block 4
 
 		LD A,(address+1)	; else find block to copy
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		SRL A
-		INC A
+		RLCA			; 2 most significant bits give
+		RLCA			; a 16K block index
+		AND 3
+		INC A			; blocks are mapped as 1,2,3,0
 		AND 3
 
 1$:		LD BC,0200H + PORT0	; map block to copy to 0x8000
