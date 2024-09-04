@@ -1,0 +1,308 @@
+; Copyright (C) 2024 Robin Sergeant
+;
+; COPYSYS replacement
+
+BDOS		EQU 0005H
+FN_CON_INPUT	EQU 1
+FN_CON_OUT	EQU 2
+FN_PRINT	EQU 9
+FN_READ_CB	EQU 10
+FN_OPEN_FILE	EQU 15
+FN_CLOSE_FILE	EQU 16
+FN_DELETE	EQU 19
+FN_READ_SEQ	EQU 20
+FN_WRITE_SEQ	EQU 21
+FN_MAKE_FILE	EQU 22
+FN_SET_DMA	EQU 26
+FN_PARSE	EQU 152
+
+DEF_FCB		EQU 5CH
+
+RDSECL		EQU 68
+WRSECL		EQU 69
+FLUSH		EQU 71
+RDINFO		EQU 72
+
+LDR_LEN		EQU 23
+CCP_LEN		EQU 25
+
+		COM
+		ORG 100H
+
+		LD SP,(0006H)
+
+query_src:	LD C,FN_PRINT
+		LD DE,src_msg
+		CALL BDOS
+
+		LD C,FN_SET_DMA
+		LD DE,src_buf
+		CALL BDOS
+
+		LD C,FN_READ_CB
+		LD DE,0
+		CALL BDOS
+
+		LD IX,src_buf
+		CALL parse_drive
+		JR NZ,query_src
+		LD (src_drive),A
+		ADD A,'A'
+		LD (query_msg_p1),A
+
+query_dst:	LD C,FN_PRINT
+		LD DE,dst_msg
+		CALL BDOS
+
+		LD C,FN_SET_DMA
+		LD DE,dst_buf
+		CALL BDOS
+
+		LD C,FN_READ_CB
+		LD DE,0
+		CALL BDOS
+
+		LD IX,dst_buf
+		CALL parse_drive
+		JR NZ,query_dst
+		LD (dst_drive),A
+		ADD A,'A'
+		LD (query_msg_p2),A
+
+		LD C,FN_PRINT
+		LD DE,query_msg
+		CALL BDOS
+		LD C,FN_CON_INPUT
+		CALL BDOS
+		CALL parse_yesno
+		JP NZ,0
+
+		LD C,FN_PRINT
+		LD DE,query2_msg
+		CALL BDOS
+		LD C,FN_CON_INPUT
+		CALL BDOS
+		CALL parse_yesno
+		JR NZ,start
+		LD A,1
+		LD (file_copy),A
+
+start:		LD C,FN_PRINT
+		LD DE,wait_msg
+		CALL BDOS
+
+		LD IX,unit
+		LD A,(src_drive)
+		LD (unit),A
+		LD B,1			; read cold boot sector
+		CALL read_track
+
+		SET 5,(IX+0)
+
+		LD B,LDR_LEN		; read cpmldr track
+		CALL read_track
+
+		LD B,CCP_LEN		; read ccp track
+		CALL read_track
+
+		LD A,(src_drive)	; setup src FCB
+		ADD A,'A'
+		LD (sys_fname),A
+		LD C,FN_PARSE
+		LD DE,pfcb
+		CALL BDOS
+
+		LD C,FN_OPEN_FILE
+		LD DE,DEF_FCB
+		CALL BDOS
+		INC A
+		JR NZ,1$
+		LD C,FN_PRINT
+		LD DE,not_found
+		CALL BDOS
+		JP 0
+
+1$:		LD DE,(address)
+
+read_file:	PUSH DE
+		LD C,FN_SET_DMA
+		CALL BDOS
+
+		LD C,FN_CON_OUT
+		LD E,'.'
+		CALL BDOS
+
+		LD C,FN_READ_SEQ
+		LD DE,DEF_FCB
+		CALL BDOS
+		POP HL
+		OR A
+		JR NZ,2$		; end of file
+
+		LD BC,128
+		ADD HL,BC
+		EX DE,HL
+
+		LD HL,file_len
+		INC (HL)
+		JR read_file
+
+2$:		LD IX,unit
+		LD A,(dst_drive)
+		LD (unit),A
+		LD (IX+1),0		; reset track and address
+		LD HL,buffer
+		LD (address),HL
+		LD B,1			; write cold boot sector
+		CALL write_track
+
+		SET 5,(IX+0)
+
+		LD B,LDR_LEN		; write cpmldr track
+		CALL write_track
+
+		LD B,CCP_LEN		; write ccp track
+		CALL write_track
+
+		LD A,(dst_drive)	; setup dst FCB
+		ADD A,'A'
+		LD (sys_fname),A
+		LD C,FN_PARSE
+		LD DE,pfcb
+		CALL BDOS
+
+		LD C,FN_DELETE		; delete existing file
+		LD DE,DEF_FCB		; (if present)
+		CALL BDOS
+
+		LD C,FN_MAKE_FILE	; create new file
+		LD DE,DEF_FCB
+		CALL BDOS
+
+		LD DE,(address)
+
+write_file:	PUSH DE
+		LD C,FN_SET_DMA
+		CALL BDOS
+
+		LD C,FN_CON_OUT
+		LD E,'.'
+		CALL BDOS
+
+		LD C,FN_WRITE_SEQ
+		LD DE,DEF_FCB
+		CALL BDOS
+		POP HL
+
+		LD BC,128
+		ADD HL,BC
+		EX DE,HL
+
+		LD HL,file_len
+		DEC (HL)
+		JR NZ,write_file	
+
+		LD C,FN_CLOSE_FILE
+		LD DE,DEF_FCB
+		CALL BDOS		
+
+done:		LD C,FN_PRINT
+		LD DE,done_msg
+		CALL BDOS
+
+		JP 0
+
+read_track:	EMT RDSECL
+		PUSH BC
+		LD C,FN_CON_OUT
+		LD E,'.'
+		CALL BDOS
+		POP BC
+		INC (IX+2)		; increase sector no.
+		LD HL,(address)
+		LD DE,128
+		ADD HL,DE
+		LD (address),HL		; advance buffer
+		DJNZ read_track
+		INC (IX+1)		; increase track no.
+		LD (IX+2),1		; reset sector no.
+		RET
+
+write_track:	EMT WRSECL
+		PUSH BC
+		LD C,FN_CON_OUT
+		LD E,'.'
+		CALL BDOS
+		POP BC
+		INC (IX+2)		; increase sector no.
+		LD HL,(address)
+		LD DE,128
+		ADD HL,DE
+		LD (address),HL		; advance buffer
+		DJNZ write_track
+		INC (IX+1)		; increase track no.
+		LD (IX+2),1		; reset sector no.
+		RET		
+		
+parse_drive:	LD A,(IX+1)		; check length
+		CP 1
+		LD A,(IX+2)
+		LD (IX+2),0		; clear buffer
+		RET NZ			; return if length was not 1
+		CP 'A'
+		JR Z,1$
+		CP 'a'
+		JR Z,1$
+		CP 'B'
+		jr Z,2$
+		cp 'b'
+2$:		LD A,1			; B = 1
+		RET
+1$:		XOR A			; A = 0
+		RET
+
+parse_yesno:	CP 'Y'
+		RET Z
+		CP 'y'
+		RET
+
+src_msg:	DEFM 'Source drive (A or B): $'
+src_buf:	DEFB 2,1,'A',0
+
+dst_msg:	DEFM 'Destination drive (A or B): $'
+dst_buf:	DEFB 2,1,'B',0
+
+query_msg:	DEFB 13
+		DEFM 'Copy system tracks from drive '
+query_msg_p1:	DEFM '_ to drive '
+query_msg_p2:	DEFM '_? (Y/N): $'
+
+query2_msg:	DEFB 13,13
+		DEFM 'Also copy CPM3.SYS? (Y/N): $'
+
+not_found:	DEFB 13,13
+		DEFM 'CPM3.SYS not found$'
+
+done_msg:	DEFB 13,13
+		DEFM 'Done!$'
+
+wait_msg:	DEFB 13,13
+		DEFM 'Please wait$'
+
+sys_fname:	DEFM '_:CPM3.SYS'
+		DEFB 0
+
+pfcb:		DEFW sys_fname
+		DEFW DEF_FCB
+
+unit:		DEFB 0
+track:		DEFB 0
+sector:		DEFB 1
+address:	DEFW buffer
+
+file_copy:	DEFB 0
+src_drive:	DEFS 1
+dst_drive:	DEFS 1
+file_len:	DEFS 1
+
+buffer:
