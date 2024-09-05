@@ -26,6 +26,13 @@ RDINFO		EQU 72
 LDR_LEN		EQU 23
 CCP_LEN		EQU 25
 
+BOOT_OFFSET	EQU buffer
+LDR_OFFSET	EQU BOOT_OFFSET + 128
+
+BOOT_UNIT_LOC	EQU BOOT_OFFSET + 0032H
+LDR_UNIT_LOC	EQU LDR_OFFSET + 0AC0H
+LDR_DPB_LOC	EQU LDR_OFFSET + 0AA3H
+
 		COM
 		ORG 100H
 
@@ -97,7 +104,9 @@ start:		LD C,FN_PRINT
 		LD B,1			; read cold boot sector
 		CALL read_track
 
-		SET 5,(IX+0)
+		CALL read_info		; set density bits for track 1 onwards
+		OR (IX+0)
+		LD (unit),A
 
 		LD B,LDR_LEN		; read cpmldr track
 		CALL read_track
@@ -153,16 +162,35 @@ read_file:	PUSH DE
 		LD (IX+1),0		; reset track and address
 		LD HL,buffer
 		LD (address),HL
+
+		CALL read_info
+		LD (dst_density),A
+
+		LD (BOOT_UNIT_LOC),A	; patch unit density bits
+		LD (LDR_UNIT_LOC),A
+
+		LD HL,dpb_dd		; use matching DPD for density
+		BIT 6,A
+		JR Z,3$
+		LD HL,dpb_qd
+3$:		LD DE,LDR_DPB_LOC	; replace DPB
+		LD BC,DPB_LEN
+		LDIR
+
 		LD B,1			; write cold boot sector
 		CALL write_track
 
-		SET 5,(IX+0)
+		LD A,(dst_density)
+		OR (IX+0)
+		LD (unit),A
 
 		LD B,LDR_LEN		; write cpmldr track
 		CALL write_track
 
 		LD B,CCP_LEN		; write ccp track
 		CALL write_track
+
+		EMT FLUSH
 
 		LD A,(dst_drive)	; setup dst FCB
 		ADD A,'A'
@@ -243,7 +271,16 @@ write_track:	EMT WRSECL
 		INC (IX+1)		; increase track no.
 		LD (IX+2),1		; reset sector no.
 		RET		
-		
+
+read_info:	LD IX,unit
+		EMT RDINFO		; read disc info
+		AND 00000110B		; keep data and track density
+		RLCA			; shift to bits 5 and 6 to
+		RLCA			; match drive unit byte format
+		RLCA
+		RLCA
+		RET
+
 parse_drive:	LD A,(IX+1)		; check length
 		CP 1
 		LD A,(IX+2)
@@ -295,6 +332,33 @@ sys_fname:	DEFM '_:CPM3.SYS'
 pfcb:		DEFW sys_fname
 		DEFW DEF_FCB
 
+dpb_dd:		DEFW 36		; SPT
+		DEFB 3		; BSH
+		DEFB 7		; BLM
+		DEFB 0		; EXM
+		DEFW 165	; DSM
+		DEFW 63		; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 8000H	; CKS (not required)
+		DEFW 3		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
+
+dpb_qd:		DEFW 36		; SPT
+		DEFB 4		; BSH
+		DEFB 15		; BLM
+		DEFB 1		; EXM
+		DEFW 172	; DSM
+		DEFW 127	; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 8000H	; CKS (not required)
+		DEFW 3		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
+DPB_LEN		EQU $ - dpb_qd
+
 unit:		DEFB 0
 track:		DEFB 0
 sector:		DEFB 1
@@ -304,5 +368,6 @@ file_copy:	DEFB 0
 src_drive:	DEFS 1
 dst_drive:	DEFS 1
 file_len:	DEFS 1
+dst_density:	DEFS 1
 
 buffer:
