@@ -1,6 +1,7 @@
 TARGETS = cpmldr.com \
           coldboot.com \
           install.com \
+	  copysys.com \
           cpm3.sys
 
 all: $(TARGETS)
