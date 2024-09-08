@@ -15,7 +15,7 @@ FN_DRV_GET	EQU 25
 FN_SET_DMA	EQU 26
 
 BUF_START	EQU 1000H
-BOOT_UNIT_LOC	EQU BUF_START + 0032H
+BOOT_UNIT_LOC	EQU BUF_START + 002EH
 LDR_UNIT_LOC	EQU BUF_START + 0AC0H
 LDR_DPB_LOC	EQU BUF_START + 0AA3H
 
@@ -111,6 +111,7 @@ read_loop:	LD C,FN_SET_DMA
 		JR read_loop
 
 write_file:	LD IX,unit
+		LD BC,128
 write_loop:	XOR A
 		LD HL,sector_count
 		CP (HL)
@@ -122,7 +123,6 @@ write_loop:	XOR A
 
 		INC (IX+2)		; increment sector
 		LD HL,(address)
-		LD BC,128
 		ADD HL,BC
 		LD (address),HL
 

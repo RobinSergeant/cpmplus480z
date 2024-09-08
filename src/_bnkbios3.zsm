@@ -104,13 +104,11 @@ boot:		LD SP,bios_stack
 		
 init_rdisk:	LD E,0			; copy RAM disk label
 		LD HL,m_label
-		LD BC,32
+		LD BC,33		; size of label extent + init byte
 		LDIR
 
-		EX DE,HL		; clear remainder of RAM disk directory
-		LD DE,0021H
-		LD (HL),0E5H		; 0xE5 is the unused status byte
-		LD BC,07DFH
+		LD HL,0020H		; clear remainder of RAM disk directory
+		LD BC,2015
 		LDIR
 
 init_rdisk_ok:	LD C,PORT0		; map RAM bank 1 back to 0000H
@@ -128,18 +126,15 @@ init_rdisk_ok:	LD C,PORT0		; map RAM bank 1 back to 0000H
 		LD (unit),A
 
 		LD HL,(address)
-		LD BC,128
+		LD DE,128
+		LD B,CCP_LEN
 
 read_loop:	EMT RDSECL
 		JR NZ,read_error
-
-		ADD HL,BC		; advance buffer
+		INC (IX+2)		; increase sector no.
+		ADD HL,DE		; advance buffer
 		LD (address),HL
-		LD A,(sector)		; increment sector no.
-		INC A
-		LD (sector),A
-		CP CCP_LEN+1
-		JR C,read_loop
+		DJNZ read_loop
 
 		LD C,PORT1		; select Page 3 (all RAM)
 		LD A,(PORT1_MASK)
@@ -726,7 +721,7 @@ dma_bank:	DEFB 0
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13
-		DEFM 'BIOS v 0.4 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.5 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13
 		DEFM 'Silicon Disc on drive M:'
 		DEFB 13,13,-1
@@ -738,6 +733,7 @@ m_label:	DEFB 32
 		DEFM 'SILICONDISC'
 		DEFB 1
 		DEFS 19
+		DEFB 0E5H	; unused status byte to init rest of directory area
 
 xlt:		DEFB 1,4,7,10,13,16,3,6,9,12,15,2,5,8,11,14
 

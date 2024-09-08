@@ -82,18 +82,15 @@ boot:		LD SP,4000H
 		LD (unit),A
 
 		LD HL,(address)
-		LD BC,128
+		LD DE,128
+		LD B,CCP_LEN
 
 read_loop:	EMT RDSECL
 		JR NZ,read_error
-
-		ADD HL,BC		; advance buffer
+		INC (IX+2)		; increase sector no.
+		ADD HL,DE		; advance buffer
 		LD (address),HL
-		LD A,(sector)		; increment sector no.
-		INC A
-		LD (sector),A
-		CP CCP_LEN+1
-		JR C,read_loop
+		DJNZ read_loop
 
 		LD C,PORT1		; select Page 3 (all RAM)
 		LD A,(PORT1_MASK)
@@ -452,7 +449,7 @@ saved_sp:	DEFS 2
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13
-		DEFM 'BIOS v 0.3 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.5 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13,-1
 
 ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'

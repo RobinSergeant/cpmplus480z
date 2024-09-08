@@ -30,7 +30,7 @@ CCP_LEN		EQU 25
 BOOT_OFFSET	EQU buffer
 LDR_OFFSET	EQU BOOT_OFFSET + 128
 
-BOOT_UNIT_LOC	EQU BOOT_OFFSET + 0032H
+BOOT_UNIT_LOC	EQU BOOT_OFFSET + 002EH
 LDR_UNIT_LOC	EQU LDR_OFFSET + 0AC0H
 LDR_DPB_LOC	EQU LDR_OFFSET + 0AA3H
 
@@ -278,11 +278,11 @@ read_track:	LD A,(track)
 		LD DE,read_msg
 		CALL BDOS
 		POP BC
+		LD HL,(address)
+		LD DE,128
 1$:		EMT RDSECL
 		RET NZ
 		INC (IX+2)		; increase sector no.
-		LD HL,(address)
-		LD DE,128
 		ADD HL,DE
 		LD (address),HL		; advance buffer
 		DJNZ 1$
@@ -299,11 +299,11 @@ write_track:	LD A,(track)
 		LD DE,write_msg
 		CALL BDOS
 		POP BC
+		LD HL,(address)
+		LD DE,128
 1$:		EMT WRSECL
 		RET NZ
 		INC (IX+2)		; increase sector no.
-		LD HL,(address)
-		LD DE,128
 		ADD HL,DE
 		LD (address),HL		; advance buffer
 		DJNZ 1$
