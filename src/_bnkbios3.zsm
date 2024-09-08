@@ -90,13 +90,30 @@ boot:		LD SP,bios_stack
 		INC A
 		OUT (C),A
 
-		LD DE,0001H		; clear RAM disk directory
-		LD HL,0000H
-		LD (HL),0E5H		; 0xE5 is the unused status byte
-		LD BC,07FFH
+		LD DE,0000H		; look for ram disk label
+		LD HL,m_label
+		LD B,12
+1$:		LD A,(DE)
+		CP (HL)
+		JR NZ,init_rdisk
+		INC E
+		INC HL
+		DEC B
+		DJNZ 1$
+		JR init_rdisk_ok	; assume initialised if present
+		
+init_rdisk:	LD E,0			; copy RAM disk label
+		LD HL,m_label
+		LD BC,32
 		LDIR
 
-		LD C,PORT0		; map RAM bank 1 back to 0000H
+		EX DE,HL		; clear remainder of RAM disk directory
+		LD DE,0021H
+		LD (HL),0E5H		; 0xE5 is the unused status byte
+		LD BC,07DFH
+		LDIR
+
+init_rdisk_ok:	LD C,PORT0		; map RAM bank 1 back to 0000H
 		LD A,1
 		OUT (C),A
 		EI
@@ -716,6 +733,11 @@ sign_on:	DEFB 31
 
 ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'
 		DEFB -1
+
+m_label:	DEFB 32
+		DEFM 'SILICONDISC'
+		DEFB 1
+		DEFS 19
 
 xlt:		DEFB 1,4,7,10,13,16,3,6,9,12,15,2,5,8,11,14
 
