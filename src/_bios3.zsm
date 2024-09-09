@@ -75,42 +75,11 @@ boot:		LD SP,4000H
 		LD HL,sign_on
 		EMT MSG
 
-		LD IX,unit		; load CCP from track 2
+		CALL load_ccp
+		LD (checksum),A
+		JP Z,0100H		; start CCP if loaded ok
 
-		CALL get_discinfo	; set density for disc
-		JR NZ,read_error
-		LD (unit),A
-
-		LD HL,(address)
-		LD DE,128
-		LD B,CCP_LEN
-
-read_loop:	EMT RDSECL
-		JR NZ,read_error
-		INC (IX+2)		; increase sector no.
-		ADD HL,DE		; advance buffer
-		LD (address),HL
-		DJNZ read_loop
-
-		LD C,PORT1		; select Page 3 (all RAM)
-		LD A,(PORT1_MASK)
-		OR 3
-		DI			; disable interrupts while
-		OUT (C),A		; ROM is unavailable
-
-		LD DE,0E800H		; copy CCP to hidden area
-		LD HL,0100H		; of RAM (behind ROM) so
-		LD BC,CCP_SIZE		; we can quickly copy it back
-		LDIR			; during a warm boot
-
-		LD C,PORT1		; return to Page 1
-		LD A,(PORT1_MASK)
-		OUT (C),A
-		EI			; re-enable interrupts
-
-		JP 0100H		; start CCP
-
-read_error:	LD HL,ccp_err_msg
+		LD HL,ccp_err_msg
 		EMT MSG
 		DI
 		HALT			; nothing more we can do
@@ -133,14 +102,30 @@ wboot:		LD SP,bios_stack
 		LD DE,0100H		; copy CCP back to TPA
 		LD HL,0E800H
 		LD BC,CCP_SIZE
-		LDIR
+		XOR A
+1$:		ADD (HL)
+		LDI
+		JP PE,1$
+		LD HL,checksum
+		CP (HL)			; compare checksum
 
 		LD C,PORT1		; return to Page 1
 		LD A,(PORT1_MASK)
 		OUT (C),A
 		EI			; re-enable interrupts
 
-		JP 0100H		; start CCP
+		JP Z,0100H		; start CCP if checksum ok
+reload:		CALL load_ccp		; else reload
+		JR NZ,reload_error
+		LD HL,checksum
+		CP (HL)
+		JP Z,0100H
+reload_error:	LD HL,reload_msg
+		EMT MSG
+		EMT KBDW
+		LD IX,inisys_byte	; re-initialize IDC buffers
+		EMT INISYS
+		JR reload
 
 init_page0:	LD A,0C3H
 		LD HL,wboot_entry
@@ -150,8 +135,51 @@ init_page0:	LD A,0C3H
 		LD HL,(@mxtpa)
 		LD (0005H),A
 		LD (0006H),HL
-
 		RET
+
+load_ccp:	LD IX,unit		; load CCP from track 2 of A:
+		LD (IX+0),0
+		LD (IX+1),2
+		LD (IX+2),1
+		LD HL,0100H
+		LD (address),HL
+
+		CALL get_discinfo	; set density for disc
+		RET NZ
+		LD (unit),A
+
+		LD HL,(address)
+		LD DE,128
+		LD B,CCP_LEN
+
+read_loop:	EMT RDSECL
+		RET NZ
+		INC (IX+2)		; increase sector no.
+		ADD HL,DE		; advance buffer
+		LD (address),HL
+		DJNZ read_loop
+
+		LD C,PORT1		; select Page 3 (all RAM)
+		LD A,(PORT1_MASK)
+		OR 3
+		DI			; disable interrupts while
+		OUT (C),A		; ROM is unavailable
+
+		LD DE,0E800H		; copy CCP to hidden area
+		LD HL,0100H		; of RAM (behind ROM) so
+		LD BC,CCP_SIZE		; we can quickly copy it back
+		XOR A			; during a warm boot
+1$:		ADD (HL)
+		LDI
+		JP PE,1$
+		CP A			; set zero flag for success
+
+		LD C,PORT1		; return to Page 1
+		LD HL,PORT1_MASK
+		LD D,(HL)
+		OUT (C),D
+		EI			; re-enable interrupts
+		RET			; A contains checksum value
 
 const:		LD (saved_sp),SP
 		LD SP,bios_stack
@@ -444,12 +472,18 @@ address:	DEFW 0100H
 
 inisys_byte:	DEFB 1111000B
 
+checksum:	DEFS 1
+
 saved_sp:	DEFS 2
+
+reload_msg:	DEFB 13,13
+		DEFM 'Insert system disc in drive A: and press <return>'
+		DEFB -1
 
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13
-		DEFM 'BIOS v 0.5 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.6 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13,-1
 
 ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'
