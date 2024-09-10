@@ -243,14 +243,9 @@ read_loop:	EMT RDSECL
 		EI			; re-enable interrupts
 		RET			; HL contains checksum value
 
-verify_cs:	EX DE,HL
-		LD HL,checksum
-		LD A,E
-		CP (HL)
-		RET NZ
-		INC HL
-		LD A,D
-		CP (HL)
+verify_cs:	LD DE,(checksum)
+		OR A			; reset carry flag
+		SBC HL,DE
 		RET
 
 const:		LD (saved_sp),SP
@@ -776,7 +771,7 @@ reload_msg:	DEFB 13,13
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13
-		DEFM 'BIOS v 0.7 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.8 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13
 		DEFM 'Silicon Disc on drive M:'
 		DEFB 13,13,-1
