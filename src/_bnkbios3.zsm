@@ -141,30 +141,8 @@ wboot:		LD SP,bios_stack
 		LD A,1			; set 80 column mode in case changed
 		EMT WIDTH
 
-		LD C,PORT1		; select Page 3 (all RAM)
-		LD A,(PORT1_MASK)
-		OR 3
-		DI			; disable interrupts while
-		OUT (C),A		; ROM is unavailable
-
-		LD HL,0			; checksum registers
-		LD D,0
-		EXX
-		LD DE,0100H		; copy CCP back to TPA
-		LD HL,0E800H
-		LD BC,CCP_SIZE
-1$:		LD A,(HL)
-		EXX
-		LD E,A
-		ADD HL,DE		; generate checksum
-		EXX
-		LDI
-		JP PE,1$
-		EXX
-
-		LD A,(PORT1_MASK)	; return to Page 1
-		OUT (C),A
-		EI			; re-enable interrupts
+		LD A,0EBH		; opcode for EX DE,HL
+		CALL copy_ccp		; copy CCP back to TPA
 
 		CALL verify_cs
 		JR NZ,reload		; only start CCP if checksum ok
@@ -216,6 +194,9 @@ read_loop:	EMT RDSECL
 		LD (address),HL
 		DJNZ read_loop
 
+		XOR A			; NOP (store CCP)
+copy_ccp:	LD (copy_ccp_op),A	; set direction of copy
+
 		LD C,PORT1		; select Page 3 (all RAM)
 		LD A,(PORT1_MASK)
 		OR 3
@@ -227,6 +208,7 @@ read_loop:	EMT RDSECL
 		EXX
 		LD DE,0E800H		; copy CCP to hidden area
 		LD HL,0100H		; of RAM (behind ROM) so
+copy_ccp_op:	NOP
 		LD BC,CCP_SIZE		; we can quickly copy it back
 1$:		LD A,(HL)		; during a warm boot
 		EXX
@@ -487,7 +469,6 @@ rdisk_read:	LD A,0EBH		; opcode for EX DE,HL
 		JR rdisk_copy
 
 rdisk_write:	XOR A			; opcode for NOP
-		JR rdisk_copy
 
 rdisk_copy:	EXX
 		LD (rdisk_op),A		; self modifying code
