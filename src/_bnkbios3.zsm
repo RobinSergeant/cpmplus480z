@@ -120,7 +120,7 @@ init_rdisk_ok:	LD C,PORT0		; map RAM bank 1 back to 0000H
 		EMT MSG
 
 		CALL load_ccp
-		LD (checksum),A
+		LD (checksum),HL
 		JP Z,start_ccp
 
 		LD HL,ccp_err_msg
@@ -147,26 +147,35 @@ wboot:		LD SP,bios_stack
 		DI			; disable interrupts while
 		OUT (C),A		; ROM is unavailable
 
+		LD HL,0			; checksum registers
+		LD D,0
+		EXX
 		LD DE,0100H		; copy CCP back to TPA
 		LD HL,0E800H
 		LD BC,CCP_SIZE
-		XOR A
-1$:		ADD (HL)
+1$:		LD A,(HL)
+		EXX
+		LD E,A
+		ADD HL,DE		; generate checksum
+		EXX
 		LDI
 		JP PE,1$
-		LD HL,checksum
-		CP (HL)			; compare checksum
+		EXX
 
-		LD C,PORT1		; return to Page 1
-		LD A,(PORT1_MASK)
+		LD A,(PORT1_MASK)	; return to Page 1
 		OUT (C),A
 		EI			; re-enable interrupts
 
-		JR Z,start_ccp		; start CCP if checksum ok
+		CALL verify_cs
+		JR NZ,reload		; only start CCP if checksum ok
+
+start_ccp:	LD HL,cursor_keys	; re-configure cursor keys
+		EMT MSG
+		JP 0100H		; start CCP
+
 reload:		CALL load_ccp		; else reload
 		JR NZ,reload_error
-		LD HL,checksum
-		CP (HL)
+		CALL verify_cs
 		JR Z,start_ccp
 reload_error:	LD HL,reload_msg
 		EMT MSG
@@ -174,11 +183,6 @@ reload_error:	LD HL,reload_msg
 		LD IX,inisys_byte	; re-initialize IDC buffers
 		EMT INISYS
 		JR reload
-
-start_ccp:	LD HL,cursor_keys	; re-configure cursor keys
-		EMT MSG
-
-		JP 0100H		; start CCP
 
 init_page0:	LD A,0C3H
 		LD HL,wboot_entry
@@ -218,21 +222,36 @@ read_loop:	EMT RDSECL
 		DI			; disable interrupts while
 		OUT (C),A		; ROM is unavailable
 
+		LD HL,0			; checksum registers
+		LD D,0
+		EXX
 		LD DE,0E800H		; copy CCP to hidden area
 		LD HL,0100H		; of RAM (behind ROM) so
 		LD BC,CCP_SIZE		; we can quickly copy it back
-		XOR A			; during a warm boot
-1$:		ADD (HL)
+1$:		LD A,(HL)		; during a warm boot
+		EXX
+		LD E,A
+		ADD HL,DE		; generate checksum
+		EXX
 		LDI
 		JP PE,1$
+		EXX
 		CP A			; set zero flag for success
 
-		LD C,PORT1		; return to Page 1
-		LD HL,PORT1_MASK
-		LD D,(HL)
-		OUT (C),D
+		LD A,(PORT1_MASK)	; return to Page 1
+		OUT (C),A
 		EI			; re-enable interrupts
-		RET			; A contains checksum value
+		RET			; HL contains checksum value
+
+verify_cs:	EX DE,HL
+		LD HL,checksum
+		LD A,E
+		CP (HL)
+		RET NZ
+		INC HL
+		LD A,D
+		CP (HL)
+		RET
 
 const:		LD (saved_sp),SP
 		LD SP,bios_stack
@@ -735,7 +754,7 @@ address:	DEFW 0100H
 
 inisys_byte:	DEFB 1111000B
 
-checksum:	DEFS 1
+checksum:	DEFW 0
 
 buffer_addr:	DEFS 2
 common_buffer:	DEFS 128
@@ -757,7 +776,7 @@ reload_msg:	DEFB 13,13
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13
-		DEFM 'BIOS v 0.6 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.7 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13
 		DEFM 'Silicon Disc on drive M:'
 		DEFB 13,13,-1
