@@ -13,6 +13,9 @@ WRSECL		EQU 69
 FLUSH		EQU 71
 RDINFO		EQU 72
 
+BDOS		EQU 0005H
+DRV_ALLRESET	EQU 13
+
 CCP_LEN		EQU 25
 CCP_SIZE	EQU CCP_LEN * 128
 PORT1_MASK	EQU 0FF01H
@@ -104,6 +107,8 @@ wboot:		LD SP,bios_stack
 reload:		CALL load_ccp		; else reload
 		JR NZ,reload_error
 		CALL verify_cs
+		LD C,DRV_ALLRESET	; reset drives before starting CCP
+		CALL Z,BDOS		; (in case disc has changed)
 		JP Z,0100H
 reload_error:	LD HL,reload_msg
 		EMT MSG
@@ -469,7 +474,7 @@ track:		DEFB 2
 sector:		DEFB 1
 address:	DEFW 0100H
 
-inisys_byte:	DEFB 1111000B
+inisys_byte:	DEFB 11111000B
 
 checksum:	DEFW 0
 

@@ -14,6 +14,9 @@ WRSECL		EQU 69
 FLUSH		EQU 71
 RDINFO		EQU 72
 
+BDOS		EQU 0005H
+DRV_ALLRESET	EQU 13
+
 CCP_LEN		EQU 25
 CCP_SIZE	EQU CCP_LEN * 128
 PORT1_MASK	EQU 0FF01H
@@ -132,7 +135,9 @@ init_rdisk_ok:	LD C,PORT0		; map RAM bank 1 back to 0000H
 
 wboot:		LD SP,bios_stack
 		LD A,1			; make sure we are in bank 1
-		CALL bnksel
+		LD HL,current_bank
+		CP (HL)
+		CALL NZ,bnksel
 		CALL init_page0
 
 		LD IX,inisys_byte	; re-initialize IDC buffers
@@ -154,6 +159,8 @@ start_ccp:	LD HL,cursor_keys	; re-configure cursor keys
 reload:		CALL load_ccp		; else reload
 		JR NZ,reload_error
 		CALL verify_cs
+		LD C,DRV_ALLRESET	; reset drives before starting CCP
+		CALL Z,BDOS		; (in case disc has changed)
 		JR Z,start_ccp
 reload_error:	LD HL,reload_msg
 		EMT MSG
@@ -228,6 +235,17 @@ copy_ccp_op:	NOP
 verify_cs:	LD DE,(checksum)
 		OR A			; reset carry flag
 		SBC HL,DE
+		RET
+
+get_discinfo:	LD C,RDINFO
+		CALL safe_emt
+		RET NZ			; exit on error
+		AND 00000110B		; keep data and track density
+		RLCA			; shift to bits 5 and 6 to
+		RLCA			; form drive unit byte
+		RLCA
+		RLCA
+		CP A			; set zero flag (success)
 		RET
 
 const:		LD (saved_sp),SP
@@ -316,17 +334,6 @@ set_unit:	LD (unit),A
 		POP HL
 seldsk_ret:	POP AF
 		LD SP,(saved_sp)
-		RET
-
-get_discinfo:	LD C,RDINFO
-		CALL safe_emt
-		RET NZ			; exit on error
-		AND 00000110B		; keep data and track density
-		RLCA			; shift to bits 5 and 6 to
-		RLCA			; form drive unit byte
-		RLCA
-		RLCA
-		CP A			; set zero flag (success)
 		RET
 
 settrk:		LD IX,unit
@@ -550,25 +557,19 @@ move:		EX DE,HL
 		RET
 
 bnksel:		LD (current_bank),A
-switch_bnk:	OR A
-		JR NZ,sel_bank1
-sel_bank0:	LD A,4			; bank 0 maps to blocks 4 and 5
-		DI			; disable interrupts while in bank 0
+switch_bnk:	DI			; disable interrupts
 		EXX			; preserve BC
-		LD BC,PORT0
+		OR A
+		JR NZ,1$		; bank 1 maps to blocks 1 and 2
+		LD A,4			; bank 0 maps to blocks 4 and 5
+1$:		LD BC,PORT0
 		OUT (C),A
 		INC B			; increment B to map region 0x4000H to 0x8000H
-		INC A			; increment A to select block 5
+		INC A			; increment A to select next block
 		OUT (C),A
 		EXX			; restore BC
-		RET
-sel_bank1:	EXX			; bank 1 maps to blocks 1 and 2
-		LD BC,PORT0
-		OUT (C),A
-		INC B			; increment B to map region 0x4000H to 0x8000H
-		INC A			; increment A to select block 2
-		OUT (C),A
-		EXX
+		BIT 2,A
+		RET NZ			; keep interrupts disabled in bank 0
 		EI			; enable interrupts again in bank 1
 
 not_supported:
@@ -728,7 +729,7 @@ track:		DEFB 2
 sector:		DEFB 1
 address:	DEFW 0100H
 
-inisys_byte:	DEFB 1111000B
+inisys_byte:	DEFB 11111000B
 
 checksum:	DEFW 0
 
