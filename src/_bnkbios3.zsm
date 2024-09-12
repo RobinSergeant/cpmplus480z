@@ -568,8 +568,8 @@ switch_bnk:	DI			; disable interrupts
 		INC A			; increment A to select next block
 		OUT (C),A
 		EXX			; restore BC
-		BIT 2,A
-		RET NZ			; keep interrupts disabled in bank 0
+		CP 5
+		RET Z			; keep interrupts disabled in bank 0
 		EI			; enable interrupts again in bank 1
 
 not_supported:
@@ -753,7 +753,7 @@ reload_msg:	DEFB 13,13
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13
-		DEFM 'BIOS v 0.8 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.9 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13
 		DEFM 'Silicon Disc on drive M:'
 		DEFB 13,13,-1
