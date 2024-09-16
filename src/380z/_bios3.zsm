@@ -194,9 +194,8 @@ read:		LD (saved_sp),SP
 		LD SP,bios_stack
 		LD IX,unit
 		EMT RDSEC
-		LD A,0
 		JR Z,read_ret		; return 0 for success
-		INC A			; else return 1 for failure
+		LD A,1			; else return 1 for failure
 read_ret:	LD SP,(saved_sp)
 		RET
 
@@ -207,9 +206,8 @@ write:		LD (saved_sp),SP
 		LD SP,bios_stack
 		LD IX,unit
 		EMT WRSEC
-		LD A,0
 		JR Z,write_ret		; return 0 for success
-		INC A			; else return 1 for failure
+		LD A,1			; else return 1 for failure
 write_ret:	LD SP,(saved_sp)
 		RET
 

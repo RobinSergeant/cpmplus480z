@@ -30,26 +30,6 @@ RDSEC		EQU 26
 		JP listst	; return list device status
 		JP sectrn	; translate logical to physical sector
 
-		JP conost	; return console output status
-		JP auxist	; return aux input status
-		JP auxost	; return aux output status
-		JP devtbl	; return address of device def table
-		JP cinit	; change baud rate of device
-
-		JP getdrv	; return address of disk drive table
-		JP multio	; set multiple record count for disk I/O
-		JP flush	; flush BIOS maintained disk caching
-
-		JP move		; block move memory to memory
-		JP time		; Signal Time and Date operation
-		JP bnksel	; select bank for code execution and default DMA
-		JP setbnk	; select different bank for disk I/O DMA operations.
-		JP xmove	; set source and destination banks for one operation
-
-		JP 0		; reserved for future expansion
-		JP 0		; reserved for future expansion
-		JP 0		; reserved for future expansion
-
 conout:		PUSH AF
 		LD A,C
 		EMT OUTC
@@ -70,16 +50,14 @@ setdma:		LD (address),BC
 		RET
 
 read:		EMT RDSEC
-		LD A,1
-		RET NZ		; return 1 if an error occured
-		XOR A
-		RET		; return 0 on sucess
+		RET Z		; return 0 on sucess
+		LD A,1		; or 1 if an error occured
+		RET
 
 sectrn:		LD HL,xlt
 		ADD HL,BC
 		LD L,(HL)
 		LD H,B		; B will always be zero as < 255 sectors
-		RET
 
 not_supported:
 boot:

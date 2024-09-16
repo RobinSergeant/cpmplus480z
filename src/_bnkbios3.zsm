@@ -183,22 +183,20 @@ load_ccp:	LD IX,unit		; load CCP from track 2 of A:
 		LD (IX+0),0
 		LD (IX+1),2
 		LD (IX+2),1
-		LD HL,0100H
-		LD (address),HL
 
 		CALL get_discinfo	; set density for disc
 		RET NZ
 		LD (unit),A
 
-		LD HL,(address)
+		LD HL,0100H
 		LD DE,128
 		LD B,CCP_LEN
 
-read_loop:	EMT RDSECL
+read_loop:	LD (address),HL
+		EMT RDSECL
 		RET NZ
 		INC (IX+2)		; increase sector no.
 		ADD HL,DE		; advance buffer
-		LD (address),HL
 		DJNZ read_loop
 
 		XOR A			; NOP (store CCP)

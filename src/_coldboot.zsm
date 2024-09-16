@@ -8,7 +8,7 @@ MSG		EQU 23
 WIDTH		EQU 52
 RDSECL		EQU 68
 
-LDR_LEN		EQU 23
+LDR_LEN		EQU 22
 
 		CSEG
 		ORG 0
@@ -17,7 +17,7 @@ LDR_LEN		EQU 23
 
 		LD IX,unit
 		LD DE,128
-		LD HL,(address)
+		LD HL,0100H
 		LD B,LDR_LEN
 
 read_loop:	EMT RDSECL
