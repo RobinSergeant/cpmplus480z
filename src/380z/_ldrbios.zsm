@@ -1,0 +1,155 @@
+; Copyright (C) 2024 Robin Sergeant
+;
+; stripped down bios for use by the CP/M loader
+
+OUTC		EQU 1
+RDSEC		EQU 26
+
+		CSEG
+
+		ORG 0
+
+		JP boot		; initial entry on cold start
+		JP wboot	; reentry on program exit, warm start
+
+		JP const	; return console input status
+		JP conin	; return console input character
+		JP conout	; send console output character
+		JP list		; send list output character
+		JP auxout	; send auxilliary output character
+		JP auxin	; return auxilliary input character
+
+		JP home		; set disks to logical home
+		JP seldsk	; select disk drive, return disk parameter info
+		JP settrk	; set disk track
+		JP setsec	; set disk sector
+		JP setdma	; set disk I/O memory address
+		JP read		; read physical block(s)
+		JP write	; write physical block(s)
+
+		JP listst	; return list device status
+		JP sectrn	; translate logical to physical sector
+
+		JP conost	; return console output status
+		JP auxist	; return aux input status
+		JP auxost	; return aux output status
+		JP devtbl	; return address of device def table
+		JP cinit	; change baud rate of device
+
+		JP getdrv	; return address of disk drive table
+		JP multio	; set multiple record count for disk I/O
+		JP flush	; flush BIOS maintained disk caching
+
+		JP move		; block move memory to memory
+		JP time		; Signal Time and Date operation
+		JP bnksel	; select bank for code execution and default DMA
+		JP setbnk	; select different bank for disk I/O DMA operations.
+		JP xmove	; set source and destination banks for one operation
+
+		JP 0		; reserved for future expansion
+		JP 0		; reserved for future expansion
+		JP 0		; reserved for future expansion
+
+conout:		PUSH AF
+		LD A,C
+		EMT OUTC
+		POP AF
+		RET
+
+seldsk:		LD HL,dph0
+		LD IX,unit
+		RET
+
+settrk:		LD (IX+1),C
+		RET
+
+setsec:		LD (IX+2),C
+		RET
+
+setdma:		LD (address),BC
+		RET
+
+read:		EMT RDSEC
+		LD A,1
+		RET NZ		; return 1 if an error occured
+		XOR A
+		RET		; return 0 on sucess
+
+sectrn:		LD HL,xlt
+		ADD HL,BC
+		LD L,(HL)
+		LD H,B		; B will always be zero as < 255 sectors
+		RET
+
+not_supported:
+boot:
+wboot:
+const:
+conin:
+list:
+auxout:
+auxin:
+home:
+write:
+listst:
+conost:
+auxist:
+auxost:
+devtbl:
+cinit:
+getdrv:
+multio:
+flush:
+move:
+time:
+bnksel:
+setbnk:
+xmove:		RET
+
+dph0:		DEFW 0			; XLT
+		DEFB 0,0,0,0,0,0,0,0,0	; scratch area
+		DEFB 0			; MF
+		DEFW dpb		; DPB
+		DEFW 0			; CSV (not used)
+		DEFW alv0		; ALV
+		DEFW dirbcb		; DIRBCB
+		DEFW 0FFFFH		; DTABCB (not used)
+		DEFW 0FFFFH		; HASH (disabled)
+		DEFW 0			; HBANK (not used)
+
+dpb:		DEFW 26		; SPT
+		DEFB 3		; BSH
+		DEFB 7		; BLM
+		DEFB 0		; EXM
+		DEFW 242	; DSM
+		DEFW 63		; DRM
+		DEFB 0C0H	; AL0
+		DEFB 0		; AL1
+		DEFW 8000H	; CKS (not required)
+		DEFW 2		; OFF
+		DEFB 0		; PSH
+		DEFB 0		; PHM
+
+dirbcb:		DEFB 0FFH	; DRV
+		DEFS 3		; REC#
+		DEFS 1		; WFLG
+		DEFS 1		; Scratch
+		DEFS 2		; TRACK
+		DEFS 2		; SECTOR
+		DEFW buffer	; BUFFAD
+
+xlt:		DEFB 1,7,13,19,25
+		DEFB 5,11,17,23
+		DEFB 3,9,15,21
+		DEFB 2,8,14,20,26
+		DEFB 6,12,18,24
+		DEFB 4,10,16,22
+
+unit:		DEFB 00000000B
+track:		DEFB 0
+sector:		DEFB 0
+address:	DEFW 0
+
+alv0:		DEFS 45
+
+buffer:		DEFS 128

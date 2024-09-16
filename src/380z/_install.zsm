@@ -1,0 +1,160 @@
+; Copyright (C) 2024 Robin Sergeant
+;
+; install program
+
+WRSEC		EQU 27
+
+BDOS		EQU 0005H
+FN_PRINT	EQU 9
+FN_OUT		EQU 2
+FN_OPEN_FILE	EQU 15
+FN_READ_SEQ	EQU 20
+FN_DRV_GET	EQU 25
+FN_SET_DMA	EQU 26
+
+BUF_START	EQU 1000H
+
+		COM
+		ORG 100H
+
+		LD (saved_sp),SP
+		LD SP,stack
+
+		LD C,FN_DRV_GET		; output to selected drive
+		CALL BDOS
+		LD (unit),A
+
+		CALL read_file		; write cold boot loader to track 0
+		LD IX,unit
+		LD IY,xlt
+		CALL write_file
+
+		LD HL,ldr_fcb		; write cpmldr to same track
+		CALL setup_file
+		CALL read_file
+		LD IX,unit
+		LD IY,xlt+1
+		CALL write_file
+
+		LD HL,ccp_fcb		; write ccp to track 1
+		CALL setup_file
+		CALL read_file
+		LD IX,unit
+		LD IY,xlt
+		INC (IX+1)		; increment track
+		CALL write_file
+
+exit:		LD SP,(saved_sp)
+		RET
+
+setup_file:	LD (current_fcb),HL
+		LD HL,BUF_START		; reset buffer pointers
+		LD (dma_buffer),HL
+		LD (address),HL
+		LD HL,ok_param		; put new track number in ok string
+		INC (HL)
+		RET
+
+read_file:	LD C,FN_OPEN_FILE
+		LD DE,(current_fcb)
+		CALL BDOS
+		INC A
+		JR Z,not_found
+
+read_loop:	LD C,FN_SET_DMA
+		LD DE,(dma_buffer)
+		CALL BDOS
+
+		LD C,FN_READ_SEQ
+		LD DE,(current_fcb)
+		CALL BDOS
+		CP 0
+		RET NZ			; reached end of file
+
+		LD HL,sector_count
+		INC (hl)
+		LD HL,(dma_buffer)
+		LD BC,128
+		ADD HL,BC
+		LD (dma_buffer),HL
+		JR read_loop
+
+write_file:	LD BC,128
+write_loop:	XOR A
+		LD HL,sector_count
+		CP (HL)
+		JR Z,done
+		DEC (HL)
+
+		LD A,(IY+0)		; set next sector
+		INC IY
+		LD (sector),A
+		EMT WRSEC
+		JR NZ,disc_error
+
+		LD HL,(address)
+		ADD HL,BC
+		LD (address),HL
+
+		JR write_loop
+
+not_found:	LD C,FN_PRINT
+		LD DE,not_found_msg
+		CALL BDOS
+		JP exit
+
+disc_error:	LD C,FN_PRINT
+		LD DE,error_msg
+		CALL BDOS
+		JP exit
+
+done:		LD C,FN_PRINT
+		LD DE,ok_msg
+		CALL BDOS
+		RET
+
+cold_fcb:	DEFB 0
+		DEFM 'COLDBOOT'
+		DEFM 'COM'
+		DEFS 21
+
+ldr_fcb:	DEFB 0
+		DEFM 'CPMLDR  '
+		DEFM 'COM'
+		DEFS 21
+
+ccp_fcb:	DEFB 0
+		DEFM 'CCP     '
+		DEFM 'COM'
+		DEFS 21
+
+dma_buffer:	DEFW BUF_START
+sector_count:	DEFB 0
+current_fcb:	DEFW cold_fcb
+
+not_found_msg:	DEFM 'File not found'
+		DEFB 13,'$'
+
+error_msg:	DEFM 'Disc error'
+		DEFB 13,'$'
+
+ok_msg:		DEFM 'Track '
+ok_param:	DEFM '0 written'
+		DEFB 13,'$'
+
+xlt:		DEFB 1,7,13,19,25
+		DEFB 5,11,17,23
+		DEFB 3,9,15,21
+		DEFB 2,8,14,20,26
+		DEFB 6,12,18,24
+		DEFB 4,10,16,22
+
+unit:		DEFB 0
+track:		DEFB 0
+sector:		DEFB 1
+address:	DEFW BUF_START
+
+saved_sp:	DEFS 2
+
+		DEFS 32
+stack:
