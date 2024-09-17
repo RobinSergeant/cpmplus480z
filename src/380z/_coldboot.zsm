@@ -6,6 +6,7 @@ CONTC		EQU 0
 OUTC		EQU 1
 MSG		EQU 23
 RDSEC		EQU 26
+VERSN		EQU 51
 WIDTH		EQU 52
 
 LDR_LEN		EQU 22
@@ -33,6 +34,9 @@ read_loop:	EMT RDSEC
 		LD A,17			; prevent autopaging
 		EMT OUTC
 
+		EMT VERSN		; 80 column mode only supported
+		CP 40			; from COS 4.0 onwards
+		JP C,0100H
 		LD A,1			; set 80 column mode
 		EMT WIDTH
 

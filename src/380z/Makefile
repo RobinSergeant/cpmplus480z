@@ -14,7 +14,7 @@ all: $(TARGETS)
 %.com : %.zsm
 	tnylpo zasm $*.aaa
 
-nonbanked: gencpm_nonbanked.dat
+gencpm.dat: gencpm_nonbanked.dat
 	tnylpo-convert -u $< -c gencpm.dat
 
 cpmldr.com : cpmldr.rel ldrbios.rel

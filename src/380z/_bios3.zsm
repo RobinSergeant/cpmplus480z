@@ -7,7 +7,8 @@ MSG		EQU 23
 RDSEC		EQU 26
 WRSEC		EQU 27
 KBDTL		EQU 31
-KBDW		EQU 33
+KBDWF		EQU 34
+VERSN		EQU 51
 WIDTH		EQU 52
 
 BDOS		EQU 0005H
@@ -16,7 +17,7 @@ DRV_ALLRESET	EQU 13
 CCP_LEN		EQU 25
 CCP_SIZE	EQU CCP_LEN * 128
 
-		EXTERNAL @civec,@covec,@mxtpa
+		EXTERNAL @conw,@civec,@covec,@mxtpa
 
 		CSEG
 
@@ -70,7 +71,13 @@ boot:		LD SP,4000H
 		LD (@covec),HL
 		LD (@civec),HL
 
-		LD HL,sign_on
+		EMT VERSN		; change column width
+		CP 40			; for COS 3.4
+		JR NC,1$
+		LD HL,@conw
+		LD (HL),39
+
+1$:		LD HL,sign_on
 		EMT MSG
 
 		CALL load_ccp
@@ -84,8 +91,15 @@ boot:		LD SP,4000H
 wboot:		LD SP,bios_stack
 		CALL init_page0
 
-		LD A,1			; set 80 column mode in case changed
-		EMT WIDTH
+		EMT VERSN		; 80 column mode only supported
+		CP 40			; from COS 4.0 onwards
+		JR C,reload
+		LD A,-1
+		EMT WIDTH		; get current mode
+		OR A
+		JR NZ,reload		; already in 80 column mode
+		INC A
+		EMT WIDTH		; set 80 column mode
 
 reload:		CALL load_ccp		; reload ccp
 		JR NZ,reload_error
@@ -135,7 +149,7 @@ const:		LD (saved_sp),SP
 
 conin:		LD (saved_sp),SP
 		LD SP,bios_stack
-		EMT KBDW
+		EMT KBDWF
 		LD SP,(saved_sp)
 		RET
 
@@ -311,7 +325,7 @@ reload_msg:	DEFB 13,13
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 380Z'
 		DEFB 13
-		DEFM 'BIOS v 0.1 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 0.2 (C) 2024, Robin Sergeant'
 		DEFB 13,13,-1
 
 ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'
