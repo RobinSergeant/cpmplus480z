@@ -11,13 +11,17 @@ WIDTH		EQU 52
 
 LDR_LEN		EQU 22
 
+FALSE		EQU 0
+TRUE    	EQU NOT FALSE
+FDS		QUERY 'FDS System (TRUE/FALSE)'
+
 		CSEG
 		ORG 0
 
 		LD SP,4000H
 
 		LD IX,unit
-		LD IY,xlt
+		LD IY,xlt+1
 		LD DE,128
 		LD HL,0100H
 		LD B,LDR_LEN
@@ -26,7 +30,12 @@ read_loop:	EMT RDSEC
 		JR NZ,error
 		LD A,(IY+0)		; set next sector
 		INC IY
-		LD (sector),A
+		OR A			; check for end of track
+		JR NZ,1$
+		INC A			; use sector 1 of next track
+		LD IY,xlt
+		INC (IX+1)
+1$:		LD (sector),A
 		ADD HL,DE		; move destination buffer
 		LD (address),HL
 		DJNZ read_loop
@@ -46,18 +55,30 @@ error:		LD HL,err_msg
 		EMT MSG
 		EMT CONTC		; back to ROS
 
-xlt:		DEFB 13,19,25
+		COND FDS
+
+xlt:		DEFB 7,13,19,25
 		DEFB 5,11,17,23
 		DEFB 3,9,15,21
 		DEFB 2,8,14,20,26
 		DEFB 6,12,18,24
-		DEFB 4,10,16
+		DEFB 4,10,16,0
+
+		ELSE
+
+xlt:		DEFB 4,7,10,13,16,3,6,9,12,15,2,5,8,11,14,0
+
+		ENDC
 
 unit:		DEFB 00000000B
 track:		DEFB 0
+		COND FDS
 sector:		DEFB 7
+		ELSE
+sector:		DEFB 4
+		ENDC
 address:	DEFW 0100H
 
 err_msg:	DEFB 13
-		DEFM 'Disc error while loading CPMLDR.COM'
+		DEFM 'Error loading CPMLDR'
 		DEFB -1

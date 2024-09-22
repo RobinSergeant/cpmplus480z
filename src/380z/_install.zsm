@@ -14,6 +14,10 @@ FN_SET_DMA	EQU 26
 
 BUF_START	EQU 1000H
 
+FALSE		EQU 0
+TRUE    	EQU NOT FALSE
+FDS		QUERY 'FDS System (TRUE/FALSE)'
+
 		COM
 		ORG 100H
 
@@ -29,19 +33,23 @@ BUF_START	EQU 1000H
 		LD IY,xlt
 		CALL write_file
 
+		PUSH IY
 		LD HL,ldr_fcb		; write cpmldr to same track
 		CALL setup_file
 		CALL read_file
+		LD HL,sector_count	; discard last record (just a zeroed buffer)
+		DEC (HL)
+
 		LD IX,unit
-		LD IY,xlt+1
+		POP IY
 		CALL write_file
 
+		PUSH IY
 		LD HL,ccp_fcb		; write ccp to track 1
 		CALL setup_file
 		CALL read_file
 		LD IX,unit
-		LD IY,xlt
-		INC (IX+1)		; increment track
+		POP IY
 		CALL write_file
 
 exit:		LD SP,(saved_sp)
@@ -51,15 +59,13 @@ setup_file:	LD (current_fcb),HL
 		LD HL,BUF_START		; reset buffer pointers
 		LD (dma_buffer),HL
 		LD (address),HL
-		LD HL,ok_param		; put new track number in ok string
-		INC (HL)
 		RET
 
 read_file:	LD C,FN_OPEN_FILE
 		LD DE,(current_fcb)
 		CALL BDOS
 		INC A
-		JR Z,not_found
+		JP Z,not_found
 
 read_loop:	LD C,FN_SET_DMA
 		LD DE,(dma_buffer)
@@ -79,24 +85,67 @@ read_loop:	LD C,FN_SET_DMA
 		LD (dma_buffer),HL
 		JR read_loop
 
-write_file:	LD BC,128
+write_file:	LD HL,status_p1
+		LD A,(sector_count)
+		CALL set_param
+
+		LD HL,status_p2
+		LD A,(track)
+		CALL set_param
+
+		PUSH IY			; calculate logical sector
+		POP HL
+		LD BC,XLT
+		OR A			; reset carry
+		SBC HL,BC
+		LD A,L
+		LD HL,status_p3
+		CALL set_param
+
+		LD C,FN_PRINT
+		LD DE,status_msg
+		CALL BDOS
+	
+		LD BC,128
 write_loop:	XOR A
 		LD HL,sector_count
 		CP (HL)
-		JR Z,done
+		RET Z			; return when sector count is zero
 		DEC (HL)
 
-		LD A,(IY+0)		; set next sector
-		INC IY
-		LD (sector),A
 		EMT WRSEC
 		JR NZ,disc_error
+
+		INC IY
+		LD A,(IY+0)		; set next sector
+		OR A			; check for end of track
+		JR NZ,1$
+		INC A			; use sector 1 of next track
+		LD IY,xlt
+		INC (IX+1)
+1$:		LD (sector),A
 
 		LD HL,(address)
 		ADD HL,BC
 		LD (address),HL
 
 		JR write_loop
+
+set_param:	LD B,0			; B will contain tens
+1$:		CP 10
+		JR C,2$
+		SUB 10
+		INC B
+		JR 1$
+2$:		LD C,A			; C contains units
+		LD A,'0'
+		ADD A,B
+		LD (HL),A
+		LD A,'0'
+		ADD A,C
+		INC HL
+		LD (HL),A
+		RET 
 
 not_found:	LD C,FN_PRINT
 		LD DE,not_found_msg
@@ -107,11 +156,6 @@ disc_error:	LD C,FN_PRINT
 		LD DE,error_msg
 		CALL BDOS
 		JP exit
-
-done:		LD C,FN_PRINT
-		LD DE,ok_msg
-		CALL BDOS
-		RET
 
 cold_fcb:	DEFB 0
 		DEFM 'COLDBOOT'
@@ -138,16 +182,26 @@ not_found_msg:	DEFM 'File not found'
 error_msg:	DEFM 'Disc error'
 		DEFB 13,'$'
 
-ok_msg:		DEFM 'Track '
-ok_param:	DEFM '0 written'
+status_msg:	DEFM 'Writing '
+status_p1:	DEFM '__ record(s) to track '
+status_p2:	DEFM '__, sector '
+status_p3:	DEFM '__'
 		DEFB 13,'$'
+
+		COND FDS
 
 xlt:		DEFB 1,7,13,19,25
 		DEFB 5,11,17,23
 		DEFB 3,9,15,21
 		DEFB 2,8,14,20,26
 		DEFB 6,12,18,24
-		DEFB 4,10,16,22
+		DEFB 4,10,16,22,0
+
+		ELSE
+
+xlt:		DEFB 1,4,7,10,13,16,3,6,9,12,15,2,5,8,11,14,0
+
+		ENDC
 
 unit:		DEFB 0
 track:		DEFB 0

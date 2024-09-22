@@ -5,6 +5,10 @@
 OUTC		EQU 1
 RDSEC		EQU 26
 
+FALSE		EQU 0
+TRUE    	EQU NOT FALSE
+FDS		QUERY 'FDS System (TRUE/FALSE)'
+
 		CSEG
 
 		ORG 0
@@ -95,16 +99,28 @@ dph0:		DEFW 0			; XLT
 		DEFW 0FFFFH		; HASH (disabled)
 		DEFW 0			; HBANK (not used)
 
+		COND FDS
 dpb:		DEFW 26		; SPT
+		ELSE
+dpb:		DEFW 16		; SPT
+		ENDC
 		DEFB 3		; BSH
 		DEFB 7		; BLM
 		DEFB 0		; EXM
+		COND FDS
 		DEFW 242	; DSM
+		ELSE
+		DEFW 73		; DSM
+		ENDC
 		DEFW 63		; DRM
 		DEFB 0C0H	; AL0
 		DEFB 0		; AL1
 		DEFW 8000H	; CKS (not required)
+		COND FDS
 		DEFW 2		; OFF
+		ELSE
+		DEFW 3		; OFF
+		ENDC
 		DEFB 0		; PSH
 		DEFB 0		; PHM
 
@@ -116,12 +132,20 @@ dirbcb:		DEFB 0FFH	; DRV
 		DEFS 2		; SECTOR
 		DEFW buffer	; BUFFAD
 
+		COND FDS
+
 xlt:		DEFB 1,7,13,19,25
 		DEFB 5,11,17,23
 		DEFB 3,9,15,21
 		DEFB 2,8,14,20,26
 		DEFB 6,12,18,24
 		DEFB 4,10,16,22
+
+		ELSE
+
+xlt:		DEFB 1,4,7,10,13,16,3,6,9,12,15,2,5,8,11,14
+
+		ENDC
 
 unit:		DEFB 00000000B
 track:		DEFB 0

@@ -29,9 +29,13 @@ bios3.spr : bios3.rel scb.rel
 cpm3.sys : bios3.spr bdos3.spr gencpm.dat
 	tnylpo gencpm auto
 
-install: test.imd ccp.com $(TARGETS)
+test-fds: test.imd ccp.com $(TARGETS)
 	cpmrm $^
 	cpmcp $^ 0:
+
+test-mds: test.imd ccp.com $(TARGETS)
+	cpmrm -f rm-sd $^
+	cpmcp -f rm-sd $^ 0:
 
 clean:
 	rm $(TARGETS) gencpm.dat *bios*.rel *bios*.spr coldboot.rel
