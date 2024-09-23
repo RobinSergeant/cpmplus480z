@@ -5,9 +5,7 @@
 OUTC		EQU 1
 RDSEC		EQU 26
 
-FALSE		EQU 0
-TRUE    	EQU NOT FALSE
-FDS		QUERY 'FDS System (TRUE/FALSE)'
+		*INCLUDE config.zsm
 
 		CSEG
 

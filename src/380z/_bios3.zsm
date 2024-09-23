@@ -16,9 +16,7 @@ DRV_ALLRESET	EQU 13
 
 CCP_LEN		EQU 25
 
-FALSE		EQU 0
-TRUE    	EQU NOT FALSE
-FDS		QUERY 'FDS System (TRUE/FALSE)'
+		*INCLUDE config.zsm
 
 		EXTERNAL @conw,@civec,@covec,@mxtpa
 
