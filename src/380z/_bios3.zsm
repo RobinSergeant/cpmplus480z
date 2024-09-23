@@ -104,9 +104,20 @@ wboot:		LD SP,bios_stack
 
 reload:		CALL load_ccp		; reload ccp
 		JR NZ,reload_error
+
+		LD DE,0110H		; look for "LOADER" string
+		LD HL,ccp_identifier	; to check if CCP valid
+		LD BC,6			; (not full proof)
+check_ccp:	LD A,(DE)
+		CPI
+		JR NZ,reload_error
+		INC DE
+		JP PE,check_ccp		; P/V is set until BC = 0
+
 		LD C,DRV_ALLRESET	; reset drives before starting CCP
 		CALL Z,BDOS		; (in case disc has changed)
 		JP Z,0100H
+
 reload_error:	LD HL,reload_msg
 		EMT MSG
 		EMT KBDWF
@@ -340,6 +351,8 @@ sector:		DEFB 1
 address:	DEFW 0100H
 
 saved_sp:	DEFS 2
+
+ccp_identifier:	DEFM 'LOADER'
 
 reload_msg:	DEFB 13,13
 		DEFM 'Insert system disc in drive A: and press <return>'
