@@ -44,5 +44,8 @@ test-mds: test_mds.imd ccp.com $(TARGETS)
 	cpmrm -f rm-sd $^
 	cpmcp -f rm-sd $^ 0:
 
+%.zip: ccp.com $(TARGETS)
+	zip $@ $^
+
 clean:
 	rm -f $(TARGETS) gencpm.dat config.zsm *bios*.rel *bios*.spr coldboot.rel

@@ -361,7 +361,7 @@ reload_msg:	DEFB 13,13
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 380Z'
 		DEFB 13
-		DEFM 'BIOS v 0.2 (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 1.0 (C) 2024, Robin Sergeant'
 		DEFB 13,13,-1
 
 ccp_err_msg:	DEFM 'ERROR unable to load CCP from disc'

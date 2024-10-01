@@ -751,7 +751,7 @@ reload_msg:	DEFB 13,13
 sign_on:	DEFB 31
 		DEFM 'CP/M Plus (3.0) for RM 480Z'
 		DEFB 13
-		DEFM 'BIOS v 0.9 Copyright (C) 2024, Robin Sergeant'
+		DEFM 'BIOS v 1.0 Copyright (C) 2024, Robin Sergeant'
 		DEFB 13,13
 		DEFM 'Silicon Disc on drive M:'
 		DEFB 13,13,-1
