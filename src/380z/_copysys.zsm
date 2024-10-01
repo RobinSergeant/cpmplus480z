@@ -1,0 +1,392 @@
+; Copyright (C) 2024 Robin Sergeant
+;
+; COPYSYS replacement
+
+BDOS		EQU 0005H
+FN_CON_INPUT	EQU 1
+FN_CON_OUT	EQU 2
+FN_PRINT	EQU 9
+FN_READ_CB	EQU 10
+FN_OPEN_FILE	EQU 15
+FN_CLOSE_FILE	EQU 16
+FN_DELETE	EQU 19
+FN_READ_SEQ	EQU 20
+FN_WRITE_SEQ	EQU 21
+FN_MAKE_FILE	EQU 22
+FN_SET_DMA	EQU 26
+FN_RESET_DRIVE	EQU 37
+FN_PARSE	EQU 152
+
+DEF_FCB		EQU 5CH
+
+RDSEC		EQU 26
+WRSEC		EQU 27
+
+TOTAL_SECTORS	EQU 48
+
+		*INCLUDE config.zsm
+
+		COM
+		ORG 100H
+
+		LD SP,(0006H)
+
+		LD DE,src_msg		; get source drive
+		LD IX,src_buf
+		CALL query_drive
+
+		LD (src_drive),A
+		ADD A,'A'
+		LD (query_msg_p1),A
+		LD (src_dsc_msg_p1),A
+
+		LD DE,dst_msg		; get destination drive
+		LD IX,dst_buf
+		CALL query_drive
+
+		LD (dst_drive),A
+		ADD A,'A'
+		LD (query_msg_p2),A
+		LD (dst_dsc_msg_p1),A
+
+		LD DE,query_msg		; confirm drive choices
+		CALL confirm
+		JP NZ,0
+
+		LD DE,query2_msg	; confirm cpm3.sys copy
+		CALL confirm
+		JR NZ,start
+		LD A,1
+		LD (file_copy),A
+
+start:		LD DE,src_dsc_msg
+		CALL wait_for_key
+
+		LD IX,unit
+		LD A,(src_drive)
+		LD (unit),A
+		CALL reset_drive
+
+		CALL read_tracks
+		JP NZ,read_error
+
+		LD A,(file_copy)
+		OR A
+		JR Z,make_copy		; don't copy cpm3.sys
+
+		LD C,FN_PRINT
+		LD DE,load_msg
+		CALL BDOS
+
+		LD A,(src_drive)	; setup src FCB
+		ADD A,'A'
+		LD (sys_fname),A
+		LD C,FN_PARSE
+		LD DE,pfcb
+		CALL BDOS
+
+		LD C,FN_OPEN_FILE	; open file
+		LD DE,DEF_FCB
+		CALL BDOS
+		INC A
+		JR NZ,1$
+		LD C,FN_PRINT
+		LD DE,not_found		; exit if not found
+		CALL BDOS
+		JP 0
+
+1$:		LD DE,(address)
+
+read_file:	PUSH DE			; set DMA buffer for read
+		LD C,FN_SET_DMA
+		CALL BDOS
+
+		LD C,FN_READ_SEQ	; read next record
+		LD DE,DEF_FCB
+		CALL BDOS
+		POP HL
+		OR A
+		JR NZ,make_copy		; end of file
+
+		LD BC,128		; advance DMA buffer
+		ADD HL,BC
+		EX DE,HL
+
+		LD HL,file_len
+		INC (HL)
+		JR read_file
+
+make_copy:	LD DE,dst_dsc_msg
+		CALL wait_for_key
+
+		LD IX,unit
+		LD A,(dst_drive)
+		LD (unit),A
+		LD (IX+1),0		; reset track, sector and address
+		LD (IX+2),1
+		LD HL,buffer
+		LD (address),HL
+		CALL reset_drive
+
+		CALL write_tracks	; write system tracks
+		JP NZ,write_error
+
+		LD A,(file_copy)
+		OR A
+		JR Z,done		; don't copy cpm3.sys
+
+		LD C,FN_PRINT
+		LD DE,save_msg
+		CALL BDOS
+
+		LD A,(dst_drive)	; setup dst FCB
+		ADD A,'A'
+		LD (sys_fname),A
+		LD C,FN_PARSE
+		LD DE,pfcb
+		CALL BDOS
+
+		LD C,FN_DELETE		; delete existing file
+		LD DE,DEF_FCB		; (if present)
+		CALL BDOS
+
+		LD C,FN_MAKE_FILE	; create new file
+		LD DE,DEF_FCB
+		CALL BDOS
+
+		LD DE,(address)
+
+write_file:	PUSH DE
+		LD C,FN_SET_DMA
+		CALL BDOS
+
+		LD C,FN_WRITE_SEQ
+		LD DE,DEF_FCB
+		CALL BDOS
+		POP HL
+
+		LD BC,128
+		ADD HL,BC
+		EX DE,HL
+
+		LD HL,file_len
+		DEC (HL)
+		JR NZ,write_file
+
+		LD C,FN_CLOSE_FILE
+		LD DE,DEF_FCB
+		CALL BDOS
+
+done:		LD C,FN_PRINT
+		LD DE,done_msg
+		CALL BDOS
+
+again:		LD DE,query3_msg	; confirm more copies
+		CALL confirm
+		JP Z,make_copy
+
+		JP 0
+
+read_error:	LD C,FN_PRINT
+		LD DE,read_err_msg
+		CALL BDOS
+		JP 0
+
+write_error:	LD C,FN_PRINT
+		LD DE,write_err_msg
+		CALL BDOS
+		JR again
+
+read_tracks:	LD C,FN_PRINT
+		LD DE,read_msg
+		CALL BDOS
+
+		LD IX,unit
+		LD IY,xlt
+		LD DE,128
+		LD HL,(address)
+		LD B,TOTAL_SECTORS
+
+read_loop:	EMT RDSEC
+		RET NZ
+		LD A,(IY+0)		; set next sector
+		INC IY
+		OR A			; check for end of track
+		JR NZ,1$
+		INC A			; use sector 1 of next track
+		LD IY,xlt
+		INC (IX+1)
+1$:		LD (sector),A
+		ADD HL,DE		; move destination buffer
+		LD (address),HL
+		DJNZ read_loop
+		XOR A
+		RET
+
+write_tracks:	LD C,FN_PRINT
+		LD DE,write_msg
+		CALL BDOS
+
+		LD IX,unit
+		LD IY,xlt
+		LD DE,128
+		LD HL,(address)
+		LD B,TOTAL_SECTORS
+
+write_loop:	EMT WRSEC
+		RET NZ
+		LD A,(IY+0)		; set next sector
+		INC IY
+		OR A			; check for end of track
+		JR NZ,1$
+		INC A			; use sector 1 of next track
+		LD IY,xlt
+		INC (IX+1)
+1$:		LD (sector),A
+		ADD HL,DE		; move destination buffer
+		LD (address),HL
+		DJNZ write_loop	
+		XOR A
+		RET
+
+query_drive:	LD C,FN_PRINT
+		PUSH DE
+		CALL BDOS
+
+		LD C,FN_SET_DMA
+		PUSH IX
+		POP DE
+		CALL BDOS
+
+		LD C,FN_READ_CB
+		LD DE,0
+		CALL BDOS
+		POP DE
+
+		LD A,(IX+1)		; check length
+		CP 1
+		LD A,(IX+2)
+		LD (IX+2),0		; clear buffer
+		JR NZ,query_drive
+		CP 'A'
+		JR Z,1$
+		CP 'a'
+		JR Z,1$
+		CP 'B'
+		jr Z,2$
+		cp 'b'
+		JR NZ,query_drive
+2$:		LD A,1			; B = 1
+		RET
+1$:		XOR A			; A = 0
+		RET
+
+confirm:	LD C,FN_PRINT
+		CALL BDOS
+		LD C,FN_CON_INPUT
+		CALL BDOS
+		CP 'Y'
+		RET Z
+		CP 'y'
+		RET
+
+wait_for_key:	LD C,FN_PRINT
+		PUSH DE
+		CALL BDOS
+		LD C,FN_CON_INPUT
+		CALL BDOS
+		POP DE
+		CP 3			; Ctrl+C
+		JP Z,0
+		CP 13			; return key
+		JR NZ,wait_for_key
+		RET
+
+reset_drive:	LD C,FN_RESET_DRIVE
+		LD D,0
+		LD E,A
+		INC E			; logic only works for A and B
+		CALL BDOS
+		RET
+
+src_msg:	DEFM 'Source drive (A or B): $'
+src_buf:	DEFB 2,1,'A',0
+
+dst_msg:	DEFM 'Destination drive (A or B): $'
+dst_buf:	DEFB 2,1,'B',0
+
+query_msg:	DEFB 13
+		DEFM 'Copy system tracks from drive '
+query_msg_p1:	DEFM '_ to drive '
+query_msg_p2:	DEFM '_? (Y/N): $'
+
+query2_msg:	DEFB 13,13
+		DEFM 'Also copy CPM3.SYS? (Y/N): $'
+
+query3_msg:	DEFB 13,13
+		DEFM 'Copy to another disc? (Y/N): $'
+
+src_dsc_msg:	DEFB 13,13
+		DEFM 'Insert source disc in drive '
+src_dsc_msg_p1:	DEFM '_ and press <return>$'
+
+dst_dsc_msg:	DEFB 13,13
+		DEFM 'Insert destination disc in drive '
+dst_dsc_msg_p1:	DEFM '_ and press <return>$'
+
+read_msg:	DEFB 13
+		DEFM 'Reading system tracks$'
+
+write_msg:	DEFB 13
+		DEFM 'Writing system tracks$'
+
+load_msg:	DEFB 13
+		DEFM 'Loading CPM3.SYS$'
+
+save_msg:	DEFB 13
+		DEFM 'Saving CPM3.SYS$'
+
+read_err_msg:	DEFB 13,13
+		DEFM 'Disc I/O error while reading system tracks$'
+
+write_err_msg:	DEFB 13,13
+		DEFM 'Disc I/O error while writing system tracks$'
+
+not_found:	DEFB 13,13
+		DEFM 'CPM3.SYS not found$'
+
+done_msg:	DEFB 13,13
+		DEFM 'Operation complete.$'
+
+sys_fname:	DEFM '_:CPM3.SYS'
+		DEFB 0
+
+pfcb:		DEFW sys_fname
+		DEFW DEF_FCB
+
+		COND FDS
+
+xlt:		DEFB 7,13,19,25
+		DEFB 5,11,17,23
+		DEFB 3,9,15,21
+		DEFB 2,8,14,20,26
+		DEFB 6,12,18,24
+		DEFB 4,10,16,22,0
+
+		ELSE
+
+xlt:		DEFB 4,7,10,13,16,3,6,9,12,15,2,5,8,11,14,0
+
+		ENDC
+
+unit:		DEFB 0
+track:		DEFB 0
+sector:		DEFB 1
+address:	DEFW buffer
+
+file_copy:	DEFB 0
+file_len:	DEFB 0
+src_drive:	DEFS 1
+dst_drive:	DEFS 1
+
+buffer:
