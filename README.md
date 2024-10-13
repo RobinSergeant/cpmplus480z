@@ -2,6 +2,8 @@
 
 This project brings CP/M Plus (or CP/M Version 3.0) to the Research Machines 480Z and 380Z computers, which were originally supplied with CP/M 2.2.  I have written both banked and non banked versions of the BIOS from scratch in Z80 assembly language, which when linked with the original Digital Research BDOS produces a working OS.  The banked version requires additional memory (at least 96K), but provides more memory for resident programs (53K rather than 47K) and includes additional operating system features such as password protection for files and more helpful error messages.
 
+![Alt text](/.screenshots/sign_on.png?raw=true)
+
 ## Project status
 
 Now fully working and available in four versions:
